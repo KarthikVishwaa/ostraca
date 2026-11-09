@@ -35,7 +35,7 @@ export function PayPalCheckout({ amount, description }: { amount: string; descri
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    let buttons: { close: () => Promise<void> | void } | null = null;
+    let buttons: ReturnType<NonNullable<PayPalNamespace["Buttons"]>> | null = null;
     setState({ status: "loading" });
 
     (async () => {
