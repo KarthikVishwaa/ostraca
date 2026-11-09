@@ -12,13 +12,14 @@ const nav = [
   { href: "/", label: "Proof ledger" },
   { href: "/store", label: "Demo store" },
   { href: "/disputes", label: "Disputes" },
+  { href: "/limitation", label: "Limitation pack" },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <header className="border-b bg-card/60 backdrop-blur">
+        <header className="border-b bg-card/60 backdrop-blur print:hidden">
           <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
               <span className="inline-block size-6 rotate-12 rounded-[6px_14px_4px_12px] bg-primary" aria-hidden />
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <span className="ml-auto rounded-md border px-2 py-0.5 text-xs text-muted-foreground">PayPal sandbox</span>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 print:max-w-none print:p-0">{children}</main>
         <Toaster />
       </body>
     </html>
