@@ -70,8 +70,10 @@ export async function paypal<T = unknown>(path: string, opts: Options = {}): Pro
   const text = await res.text();
   const body = text ? safeJson(text) : {};
   if (!res.ok) {
-    const b = body as { name?: string; message?: string; debug_id?: string };
-    throw new PayPalError(`${b.name ?? "PAYPAL_ERROR"}: ${b.message ?? res.statusText}`, res.status, body, b.debug_id);
+    const b = body as { name?: string; message?: string; debug_id?: string; details?: Array<{ issue?: string; description?: string; field?: string }> };
+    // PayPal often hides the real reason in details[] behind a generic message.
+    const why = (b.details ?? []).map((d) => [d.field, d.issue, d.description].filter(Boolean).join(" ")).filter(Boolean).join("; ");
+    throw new PayPalError(`${b.name ?? "PAYPAL_ERROR"}: ${b.message ?? res.statusText}${why ? ` (${why})` : ""}`, res.status, body, b.debug_id);
   }
   return body as T;
 }

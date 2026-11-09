@@ -64,7 +64,11 @@ export function validateExtraction(x: Extraction, tx: CaptureContext): FieldResu
       field: "buyer_name",
       aiValue: x.buyer_name,
       status: match ? "verified" : "needs_review",
-      note: match ? "Matches the PayPal buyer" : "Could not match the PayPal buyer name",
+      note: match
+        ? "Matches the PayPal buyer"
+        : tx.buyerName
+          ? "Could not match the PayPal buyer name"
+          : "PayPal sent no buyer name to compare against. Seller confirms",
     });
   }
 
@@ -74,7 +78,11 @@ export function validateExtraction(x: Extraction, tx: CaptureContext): FieldResu
       field: "destination_city",
       aiValue: x.destination_city,
       status: match ? "verified" : "needs_review",
-      note: match ? "Matches the order's shipping city" : "City not matched to the order",
+      note: match
+        ? "Matches the order's shipping city"
+        : tx.shipToCity
+          ? "City not matched to the order"
+          : "This PayPal order has no shipping city to compare against. Seller confirms",
     });
   }
 
@@ -89,4 +97,31 @@ function fuzzyIncludes(a: string, b: string) {
   const n = (s: string) => s.toLowerCase().replace(/[^a-z஀-௿ऀ-ॿ]/g, "");
   const A = n(a), B = n(b);
   return !!A && !!B && (A.includes(B) || B.includes(A));
+}
+
+/** Fields a seller may type in or edit by hand (Manual entry). */
+export const MANUAL_FIELDS = ["tracking_number", "carrier", "amount", "date", "buyer_name", "destination_city"] as const;
+export type ManualField = (typeof MANUAL_FIELDS)[number];
+
+const BLANK: Extraction = {
+  kind: "other", language: null, transcript_original: null, transcript_english: null, tracking_number: null,
+  carrier: null, amount: null, currency: null, date: null, buyer_name: null, destination_city: null,
+  items: null, confidence: 0,
+};
+
+/**
+ * Re-check ONE value the seller typed or edited, with the same rules as an AI suggestion.
+ * `aiValue` in the result is the normalised value to store as the confirmed value.
+ */
+export function validateField(field: ManualField, value: string, tx: CaptureContext): FieldResult {
+  const v = value.trim();
+  const x: Extraction = { ...BLANK };
+  if (field === "amount") {
+    const [amount, currency] = v.split(/\s+/);
+    x.amount = amount ?? null;
+    x.currency = currency ?? null;
+  } else {
+    x[field] = v;
+  }
+  return validateExtraction(x, tx)[0] ?? { field, aiValue: v, status: "needs_review", note: "Nothing to check" };
 }

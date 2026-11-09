@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from "ag-grid-community";
 import type { Transaction } from "@/db/schema";
@@ -20,6 +22,7 @@ function ScoreCell({ value }: { value: number }) {
 }
 
 export function ProofLedger() {
+  const router = useRouter();
   const [rows, setRows] = useState<Transaction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +36,15 @@ export function ProofLedger() {
   const cols = useMemo<ColDef<Transaction>[]>(
     () => [
       { field: "capturedAt", headerName: "Sale", valueFormatter: (p) => new Date(p.value).toLocaleString(), width: 180 },
-      { field: "itemDescription", headerName: "Item", flex: 1, minWidth: 180 },
+      {
+        field: "itemDescription",
+        headerName: "Item",
+        flex: 1,
+        minWidth: 180,
+        // A real link, so the sale can be opened with the keyboard too (row click does the same for the mouse).
+        cellRenderer: (p: { data?: Transaction; value?: string }) =>
+          p.data ? <Link href={`/sales/${p.data.id}`} className="underline-offset-2 hover:underline">{p.value ?? "Sale"}</Link> : null,
+      },
       { field: "buyerName", headerName: "Buyer", width: 150 },
       { headerName: "Amount", valueGetter: (p) => `${p.data?.amount} ${p.data?.currency}`, width: 120 },
       { field: "readinessScore", headerName: "Readiness", cellRenderer: ScoreCell, width: 120, sort: "asc" },
@@ -57,7 +68,10 @@ export function ProofLedger() {
         rowData={rows ?? undefined}
         loading={rows === null}
         columnDefs={cols}
-        overlayNoRowsTemplate="No sales yet — make a test purchase in the Demo store."
+        getRowId={(p) => p.data.id}
+        onRowClicked={(e) => e.data && router.push(`/sales/${e.data.id}`)}
+        rowStyle={{ cursor: "pointer" }}
+        overlayNoRowsTemplate="No sales yet. Make a test purchase in the Demo store. Click a sale to add proof."
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import "server-only";
 import { db, schema } from "./index";
 
 export async function audit(

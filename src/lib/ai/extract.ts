@@ -95,14 +95,16 @@ export async function extractEvidence(file: { bytes: Buffer; mimeType: string; f
   } else {
     throw new Error(`Unsupported evidence type: ${file.mimeType}`);
   }
-  content.push({ type: "text", text: "Extract the evidence and call record_evidence." });
+  content.push({ type: "text", text: "Extract the evidence. You MUST answer by calling the record_evidence tool exactly once, even if every field is null." });
 
   const res = await claude.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: SYSTEM,
     tools: [recordTool],
-    tool_choice: { type: "tool", name: recordTool.name },
+    // Forced tool_choice ("tool"/"any") is rejected by this model, so ask for the tool in the
+    // prompt and fail clearly below if it is not called. zod still checks the shape.
+    tool_choice: { type: "auto" },
     messages: [{ role: "user", content }],
   });
 
