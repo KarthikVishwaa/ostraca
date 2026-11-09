@@ -1,0 +1,12 @@
+import { db, schema } from "./index";
+
+export async function audit(
+  actor: "seller" | "system" | "ai" | "paypal_webhook",
+  event: string,
+  entity?: { type: string; id: string },
+  details?: unknown
+) {
+  await db()
+    .insert(schema.auditLogs)
+    .values({ actor, event, entityType: entity?.type, entityId: entity?.id, details: details ?? null });
+}
