@@ -44,3 +44,13 @@ next-env.d.ts
 # Ostraca
 !.env.example
 /drizzle/meta
+
+# Playwright
+/playwright-report/
+/test-results/
+/e2e/.state.json
+
+# Local tooling
+.claude/
+CLAUDE.md
+AGENTS.md
