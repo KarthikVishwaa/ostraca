@@ -158,18 +158,7 @@ API routes ──► AI extraction (Claude + OpenAI speech)  suggests
 - Dispute evidence is sent only if PayPal currently offers `provide_evidence`; otherwise nothing is sent.
 - The limitation flow is a simulation. Its pack is never sent to PayPal and never claims to change PayPal's decision.
 
-## Build plan
 
-- [x] Boilerplate: checkout → capture → transaction, PayPal client, proof graph schema, extraction + validation modules
-- [x] **Flow A** — evidence upload UI, seller confirmation, approval → `/track`, readiness score
-- [x] **Flow B** — dispute webhook → cited draft → approval → `provide-evidence` → status from PayPal
-- [x] **Flow C** — simulated limitation (clearly labelled) → transaction matching → printable pack
-- [ ] Deploy to Render, demo video, Devpost story
-
-## Adding more shadcn components
-```bash
-npx shadcn@latest add dialog table dropdown-menu
-```
 
 ## License
 [MIT](./LICENSE)
