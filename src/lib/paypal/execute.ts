@@ -3,9 +3,8 @@ import { addTracking } from "./orders";
 import { provideEvidence } from "./disputes";
 
 /**
- * EXECUTES an action the seller already approved. This module only talks to PayPal:
- * it knows nothing about the approval queue or the database, and the queue
- * (src/lib/approvals.ts) never calls PayPal. The route handler joins them.
+ * EXECUTES an action the seller already approved. This module only talks to PayPal: it knows nothing about
+ * the approval queue or the database, and the queue (src/lib/approvals.ts) never calls PayPal.
  */
 export type TrackingPayload = {
   orderId: string;

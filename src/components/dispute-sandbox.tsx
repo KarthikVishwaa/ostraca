@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { toast } from "sonner";
+import { splitSafe } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { api } from "./sale-types";
 import type { DisputeView } from "./dispute-types";
@@ -21,7 +22,7 @@ export function SandboxBox({ view, onChanged }: { view: DisputeView; onChanged: 
     setArmed(null);
     setBusy(true);
     setRefusal(null);
-    const [action, outcome] = step.split(":");
+    const [action, outcome] = splitSafe(step, ":");
     try {
       const r = await api<{ status: string }>(`/api/disputes/${view.dispute.id}/sandbox`, {
         method: "POST",

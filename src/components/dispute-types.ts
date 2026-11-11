@@ -1,7 +1,9 @@
+import { statusText } from "@/lib/format";
+
 /** Shapes returned by GET /api/disputes and GET /api/disputes/[id] (dates arrive as strings). */
 export type DisputeListItem = {
   id: string;
-  reason: string;
+  reason: string | null;
   status: string;
   stage: string | null;
   amount: { value: string; currency_code: string } | null;
@@ -25,7 +27,7 @@ export type DisputeView = {
     status: string;
     state: string | null;
     stage: string | null;
-    reason: string;
+    reason: string | null;
     amount: { value: string; currency_code: string } | null;
     due: string | null;
     outcome: string | null;
@@ -55,4 +57,4 @@ export type DisputeView = {
 
 export type DraftCheck = { ok: boolean; problems: string[]; cited: string[] };
 
-export const statusLabel = (s: string) => s.replace(/_/g, " ").toLowerCase();
+export const statusLabel = (s: string | null | undefined) => statusText(s);

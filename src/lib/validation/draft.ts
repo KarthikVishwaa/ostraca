@@ -1,11 +1,7 @@
+import { splitSafe } from "@/lib/format";
 /**
- * Deterministic checks on a dispute response draft. Pure functions: no AI, no database, no network.
- *
- * The draft may be written by Claude or by the seller. Either way it must stand on numbered facts:
- *  - every sentence cites at least one fact, like [F2];
- *  - every cited ID exists;
- *  - no tracking number, amount or date appears unless it matches a fact;
- *  - delivery is only claimed when a cited fact is about delivery.
+ * Deterministic checks on a dispute draft (no AI, database or network). Whoever wrote it, Claude or the seller,
+ * every sentence must cite a numbered fact and every number must match one.
  */
 export type FactKind = "sale" | "dispute" | "tracking" | "filed" | "shipdate" | "city" | "delivery" | "evidence" | "summary";
 
@@ -48,7 +44,7 @@ export function buildTemplate(facts: Fact[]) {
 
 function sentences(draft: string) {
   const out: string[] = [];
-  for (const raw of draft.split(/(?<=[.!?])\s+|\n+/)) {
+  for (const raw of splitSafe(draft, /(?<=[.!?])\s+|\n+/)) {
     const s = raw.trim();
     if (!s) continue;
     // A chunk that is only a citation belongs to the sentence before it ("... captured. [F1]").
@@ -72,7 +68,7 @@ export function checkDraft(draft: string, facts: Fact[], options: { checkCounts?
   for (const f of facts) {
     for (const t of f.tokens ?? []) {
       tokens.add(norm(t));
-      t.split("-").forEach((p) => tokens.add(norm(p)));
+      splitSafe(t, "-").forEach((p) => tokens.add(norm(p)));
     }
     (f.dates ?? []).forEach((d) => dates.add(d));
     (f.amounts ?? []).forEach((a) => amounts.add(Number(a).toFixed(2)));
@@ -86,7 +82,7 @@ export function checkDraft(draft: string, facts: Fact[], options: { checkCounts?
     ids.forEach((id) => cited.add(id));
     const text = sentence.replace(CITE_GROUP, " ");
     const preview = `"${stripCitations(sentence).slice(0, 70)}"`;
-    const words = text.split(/\s+/).filter(Boolean).length;
+    const words = splitSafe(text, /\s+/).filter(Boolean).length;
 
     for (const id of ids) if (!byId.has(id)) problems.push(`${preview} cites ${id}, which does not exist.`);
 
@@ -107,7 +103,7 @@ export function checkDraft(draft: string, facts: Fact[], options: { checkCounts?
     // Tracking-like tokens: 8-30 capitals/digits containing a digit.
     const forTokens = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, " "); // dates are checked separately below
     for (const t of forTokens.match(/\b(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{7,39}\b/g) ?? []) {
-      const parts = [norm(t), ...t.split("-").map(norm)];
+      const parts = [norm(t), ...splitSafe(t, "-").map(norm)];
       if (!parts.some((p) => tokens.has(p))) problems.push(`${preview} contains "${t}", which matches no fact.`);
     }
 

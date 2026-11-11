@@ -1,9 +1,6 @@
 /**
- * Sandbox readiness test — run BEFORE building features:
- *   npm run check:sandbox
- * 1. Gets a PayPal sandbox token (proves your Client ID/Secret work)
- * 2. Lists your sandbox disputes (proves the Disputes API is enabled for your app)
- * 3. Tests the S10 check digit used by the validation engine
+ * Sandbox readiness check, run before building features: PayPal auth, the Disputes API, and the tracking-
+ * number validator.
  */
 import "dotenv/config";
 

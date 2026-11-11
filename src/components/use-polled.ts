@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./sale-types";
 
 /**
- * Loads a URL now, then again every `ms` while the tab is visible. The URL's route re-reads PayPal,
- * so what is on screen is never older than one interval. `refresh` forces an immediate re-read.
+ * Loads a URL now, then again every `ms` while the tab is visible. The URL's route re-reads PayPal, so
+ * what is on screen is never older than one interval. `refresh` forces an immediate re-read.
  */
 export function usePolled<T>(url: string, ms = 10_000) {
   const [data, setData] = useState<T | null>(null);

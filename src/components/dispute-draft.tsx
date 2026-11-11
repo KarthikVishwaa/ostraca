@@ -6,7 +6,10 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { TaskProgress } from "@/components/ui/task-progress";
+import { requestStream } from "@/lib/api-client";
 import { api } from "./sale-types";
+import { useStagedTask } from "./use-staged-task";
 import type { DisputeView, DraftCheck } from "./dispute-types";
 
 type Generated =
@@ -24,30 +27,37 @@ export function DraftPanel({ view, onQueued }: { view: DisputeView; onQueued: ()
   const [busy, setBusy] = useState(false);
   const seq = useRef(0);
 
-  async function generate() {
-    setBusy(true);
+  const task = useStagedTask<Generated>();
+
+  async function generate(template = false) {
     setBlocked(null);
-    try {
-      const r = await api<Generated>(`/api/disputes/${id}/draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate" }),
-      });
-      if (r.draft === null) {
-        setBlocked({ message: r.message, missing: r.missing });
-        setDraft("");
-        setCheck(null);
-        setSource(null);
-      } else {
-        setDraft(r.draft);
-        setSource(r.source);
-        setNotice(r.notice);
-        setCheck(r.check);
+    const r = await task.run((report) =>
+      requestStream<Generated>(
+        `/api/disputes/${id}/draft`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", ...(template ? { template: true } : {}) }) },
+        report
+      )
+    );
+    if (!r) return; // already running: ignore the second click
+    if (!r.ok) {
+      if (r.error.code === "ai_paused") {
+        toast.info("AI is paused for today. Using a plain template built from your facts.");
+        task.reset();
+        return generate(true);
       }
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
+      return; // the real error and a Retry button are shown by <TaskProgress>
+    }
+    const d = r.data;
+    if (d.draft === null) {
+      setBlocked({ message: d.message, missing: d.missing });
+      setDraft("");
+      setCheck(null);
+      setSource(null);
+    } else {
+      setDraft(d.draft);
+      setSource(d.source);
+      setNotice(d.notice);
+      setCheck(d.check);
     }
   }
 
@@ -106,11 +116,13 @@ export function DraftPanel({ view, onQueued }: { view: DisputeView; onQueued: ()
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={generate} disabled={busy || noSale || !view.hasProof}>
+        <Button className="w-full sm:w-auto" onClick={() => generate()} disabled={task.running || busy || noSale || !view.hasProof}>
           <Sparkles /> {draft ? "Draft again" : view.ai.claude ? "Draft response with AI" : "Draft a plain template"}
         </Button>
         {!view.ai.claude && <span className="text-xs text-muted-foreground">AI is off (ANTHROPIC_API_KEY not set). A template built from your facts is used.</span>}
       </div>
+
+      <TaskProgress state={task.state} onRetry={task.retry} onDismiss={task.reset} title="Drafting the response" />
 
       {blocked && <p className="rounded-md border p-3 text-sm">{blocked.message}</p>}
       {notice && <p className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm">{notice}</p>}
@@ -148,7 +160,7 @@ export function DraftPanel({ view, onQueued }: { view: DisputeView; onQueued: ()
               </div>
             )
           )}
-          <Button onClick={queue} disabled={busy || !check?.ok}>
+          <Button className="w-full sm:w-auto" onClick={queue} disabled={busy || !check?.ok}>
             Queue for approval
           </Button>
         </div>

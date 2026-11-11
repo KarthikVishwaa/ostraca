@@ -1,19 +1,21 @@
-/**
- * Safe reset of the Ostraca data (sandbox only).
- *
- *   npm run db:reset            shows what it WOULD delete, with row counts, and exits
- *   npm run db:reset -- --yes   actually deletes it
- *
- * It refuses to run unless PAYPAL_API_BASE is the PayPal sandbox. After clearing, it writes ONE audit
- * row, event "data_reset". Disputes that PayPal created before that moment are then ignored by the app,
- * so old sandbox disputes that PayPal still holds do not come back.
- */
+/** Sandbox-only data reset. Without --yes it only prints what it would delete. */
 import "dotenv/config";
 import { Client } from "pg";
 import { pgSettings } from "../src/db/url";
 
 // Children first, so foreign keys are respected even without CASCADE. Keep in step with src/db/schema.ts.
-const TABLES = ["transaction_evidence", "evidence_extractions", "evidence", "agent_actions", "disputes", "transactions", "audit_logs"] as const;
+// Tables added later (webhook ids, rate limits) are skipped automatically if `npm run db:push` has not created them yet.
+const ALL_TABLES = [
+  "transaction_evidence",
+  "evidence_extractions",
+  "evidence",
+  "agent_actions",
+  "disputes",
+  "transactions",
+  "webhook_events",
+  "rate_limits",
+  "audit_logs",
+] as const;
 const RESET_EVENT = "data_reset"; // same string as src/lib/data-reset.ts
 
 async function main() {
@@ -34,6 +36,11 @@ async function main() {
   const client = new Client({ connectionString, ssl, connectionTimeoutMillis: 15_000 });
   await client.connect();
   try {
+    const TABLES: string[] = [];
+    for (const t of ALL_TABLES) {
+      const exists = (await client.query(`select to_regclass($1) is not null as ok`, [`public."${t}"`])).rows[0].ok;
+      if (exists) TABLES.push(t);
+    }
     const counts: Record<string, number> = {};
     for (const t of TABLES) counts[t] = (await client.query(`select count(*)::int as n from "${t}"`)).rows[0].n;
     const total = Object.values(counts).reduce((a, b) => a + b, 0);

@@ -1,8 +1,6 @@
 /**
- * Amount reconciliation with explicit rules instead of a blunt tolerance.
- * Invoices can legitimately differ from a PayPal capture (shipping, tax,
- * discount, currency conversion), so mismatches become "needs_review" with a
- * reason — they are never silently rejected or silently accepted.
+ * Amount reconciliation with explicit rules instead of a blunt tolerance. Invoices can legitimately differ
+ * from a PayPal capture (shipping, tax, discount, currency conversion).
  */
 
 export type AmountCheck = { status: "verified" | "needs_review" | "rejected"; note: string };

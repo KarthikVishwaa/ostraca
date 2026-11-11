@@ -5,10 +5,17 @@ import Link from "next/link";
 import { FileText, FlaskConical, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { dateTime, formatMoney, formatText, shortDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PackData } from "@/lib/limitation";
 import { NOT_SENT, NO_PROMISE, SAMPLE_NOTICE, SIMULATED_BANNER } from "@/lib/limitation-text";
+import { CountUp } from "@/components/motion/count-up";
+import { Reveal } from "@/components/motion/reveal";
+import { Stagger } from "@/components/motion/stagger";
+import { DataBoundary } from "@/components/motion/data-boundary";
+import { LimitationSkeleton } from "@/components/skeletons";
+import { ReadinessChip } from "./readiness-chip";
 import { LimitationNote } from "./limitation-note";
 import { api } from "./sale-types";
 
@@ -27,7 +34,7 @@ const EVENT_LABEL: Record<string, string> = {
   "limitation.exported_download": "Downloaded the HTML file",
 };
 
-const day = (s: string) => new Date(s).toLocaleDateString();
+const day = (s: string | null | undefined) => shortDate(s);
 
 export function LimitationView() {
   const [data, setData] = useState<Payload | null>(null);
@@ -70,7 +77,7 @@ export function LimitationView() {
           <h1 className="text-3xl font-semibold tracking-tight">Limitation pack</h1>
           <p className="text-sm text-muted-foreground">Recent sales, matched to your proof, in one document you can submit yourself.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <Button variant="outline" onClick={load} disabled={busy}>
             <RefreshCw className={busy ? "animate-spin" : ""} /> Refresh from PayPal
           </Button>
@@ -94,10 +101,10 @@ export function LimitationView() {
         </Card>
       )}
 
-      {error && <p className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not build the pack: {error}</p>}
-      {!data && !error && <p className="text-sm text-muted-foreground">Reading PayPal&apos;s Transaction Search and your proof record…</p>}
-
-      {data && <PackBody data={data} onChanged={load} />}
+      {error && <p role="alert" className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not build the pack: {error}</p>}
+      <DataBoundary ready={!!data || !!error} skeleton={<LimitationSkeleton />}>
+        {data ? <PackBody data={data} onChanged={load} /> : null}
+      </DataBoundary>
     </div>
   );
 }
@@ -109,7 +116,19 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
   void onChanged;
 
   return (
-    <>
+    <div className="grid gap-6 lg:grid-cols-3">
+      {/* Summary tiles: first on small screens, a sticky column on the right from lg up. */}
+      <aside className="order-first space-y-3 lg:order-last lg:sticky lg:top-20 lg:self-start" aria-label="Summary">
+        <Stagger className="grid grid-cols-2 gap-3">
+          <Stat label="Sales" value={s.total} sub={s.amounts.map((a) => `${a.total} ${a.currency}`).join(", ") || "none"} />
+          <Stat label="Matched to proof" value={s.matched} of={s.total} sub={s.unmatched ? `${s.unmatched} with no proof on file` : "no unmatched sales"} tone={s.unmatched ? "bad" : undefined} />
+          <Stat label="Verified tracking" value={s.verifiedTracking} of={s.total} sub={s.amounts.map((a) => `${a.withVerifiedTracking} ${a.currency} covered`).join(", ") || "none"} />
+          <Stat label="Tracking filed" value={s.trackingFiled} of={s.total} sub={`${s.withEvidence} with evidence on file`} />
+        </Stagger>
+        <p className="text-xs text-muted-foreground">All numbers are counted by code from PayPal&apos;s report and your proof record. AI does not touch them.</p>
+      </aside>
+
+      <div className="min-w-0 space-y-6 lg:col-span-2">
       <Card>
         <CardHeader>
           <CardTitle>Where this list comes from</CardTitle>
@@ -142,21 +161,14 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
         </CardContent>
       </Card>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Summary">
-        <Stat label="Sales" value={`${s.total}`} sub={s.amounts.map((a) => `${a.total} ${a.currency}`).join(", ") || "none"} />
-        <Stat label="Matched to proof" value={`${s.matched} of ${s.total}`} sub={s.unmatched ? `${s.unmatched} with no proof on file` : "no unmatched sales"} tone={s.unmatched ? "bad" : undefined} />
-        <Stat label="Verified tracking" value={`${s.verifiedTracking} of ${s.total}`} sub={s.amounts.map((a) => `${a.withVerifiedTracking} ${a.currency} covered`).join(", ") || "none"} />
-        <Stat label="Tracking filed" value={`${s.trackingFiled} of ${s.total}`} sub={`${s.withEvidence} with evidence on file`} />
-      </section>
-      <p className="text-xs text-muted-foreground">All numbers are counted by code from PayPal&apos;s report and your proof record. AI does not touch them.</p>
-
       <Card>
         <CardHeader>
           <CardTitle>Sales and their proof</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           {pack.rows.length ? (
-            <table className="w-full text-sm">
+            <div className="-mx-2 overflow-x-auto px-2" tabIndex={0} role="region" aria-label="Sales and their proof, scrolls sideways on small screens">
+            <table className="w-full min-w-[44rem] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-2 pr-3 font-medium">Date</th>
@@ -173,8 +185,8 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
                 {pack.rows.map((r) => (
                   <tr key={r.key} className="border-b last:border-0 align-top">
                     <td className="py-2 pr-3 whitespace-nowrap">{day(r.date)}</td>
-                    <td className="pr-3 whitespace-nowrap">{r.amount} {r.currency}</td>
-                    <td className="pr-3">{r.buyer ?? "—"}</td>
+                    <td className="pr-3 whitespace-nowrap">{formatMoney(r.amount, r.currency)}</td>
+                    <td className="pr-3">{formatText(r.buyer)}</td>
                     <td className="pr-3">
                       {r.matched ? (
                         <Link href={`/sales/${r.saleId}`} className="underline underline-offset-2">Matched</Link>
@@ -183,7 +195,7 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
                       )}
                     </td>
                     <td className="pr-3">
-                      {r.readinessScore === null ? "—" : <Badge variant={r.readinessScore >= 80 ? "success" : r.readinessScore >= 50 ? "warning" : "destructive"}>{r.readinessScore}</Badge>}
+                      {r.readinessScore === null ? "—" : <ReadinessChip score={r.readinessScore} withWord={false} />}
                     </td>
                     <td className="pr-3">{r.evidenceCount}{r.verifiedTracking ? " · tracking verified" : ""}</td>
                     <td className="pr-3">{r.trackingFiled ? <Badge variant="success">Yes</Badge> : <Badge variant="outline">No</Badge>}</td>
@@ -194,8 +206,14 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No sales in the last 30 days. Make a test sale in the Demo store.</p>
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center">
+              <p className="text-sm text-muted-foreground">No sales in the last 30 days. Make a test sale in the Demo store.</p>
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/store">Make a test sale</Link>
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -238,7 +256,7 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
           <CardDescription>{NOT_SENT}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/limitation/pack">
               <FileText /> Open print-friendly pack
             </Link>
@@ -254,31 +272,35 @@ function PackBody({ data, onChanged }: { data: Payload; onChanged: () => void })
         </CardHeader>
         <CardContent>
           {data.activity.length ? (
-            <ol className="space-y-2 text-sm">
+            <Stagger as="ol" className="space-y-2 text-sm">
               {data.activity.slice(0, 15).map((a) => (
                 <li key={a.id}>
                   {EVENT_LABEL[a.event] ?? a.event}
-                  <span className="text-xs text-muted-foreground"> · {new Date(a.createdAt).toLocaleString()} · {a.actor}</span>
+                  <span className="text-xs text-muted-foreground"> · {dateTime(a.createdAt)} · {formatText(a.actor)}</span>
                 </li>
               ))}
-            </ol>
+            </Stagger>
           ) : (
             <p className="text-sm text-muted-foreground">Nothing yet.</p>
           )}
         </CardContent>
       </Card>
-    </>
+      </div>
+    </div>
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: "bad" }) {
+function Stat({ label, value, of, sub, tone }: { label: string; value: number; of?: number; sub: string; tone?: "bad" }) {
   return (
     <Card className="gap-1 py-4">
-      <CardHeader className="pb-0">
+      <CardHeader className="px-4 pb-0">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className={`text-2xl ${tone === "bad" ? "text-destructive" : ""}`}>{value}</CardTitle>
+        <CardTitle className={`text-2xl tabular-nums ${tone === "bad" ? "text-destructive" : ""}`}>
+          <CountUp value={value} />
+          {of !== undefined && <span className="text-base font-normal text-muted-foreground"> of {of}</span>}
+        </CardTitle>
       </CardHeader>
-      <CardContent className="text-xs text-muted-foreground">{sub}</CardContent>
+      <CardContent className="px-4 text-xs text-muted-foreground">{sub}</CardContent>
     </Card>
   );
 }

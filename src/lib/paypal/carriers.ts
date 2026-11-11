@@ -1,7 +1,6 @@
 /**
- * Map a free-text carrier to PayPal's carrier enum for Orders v2 /track.
- * Only carriers we are sure about are mapped; anything else is sent as OTHER
- * with its name, which PayPal accepts.
+ * Map a free-text carrier to PayPal's carrier enum for Orders v2 /track. Only carriers we are sure about
+ * are mapped; anything else is sent as OTHER with its name, which PayPal accepts.
  */
 const KNOWN = new Set(["DHL", "FEDEX", "UPS", "USPS", "INDIA_POST"]);
 

@@ -5,11 +5,7 @@ import { db, schema } from "@/db";
 import { audit } from "@/db/audit";
 import { DisputeIgnoredError, latestResetAt, predatesReset } from "@/lib/data-reset";
 
-/**
- * Re-reads a dispute from PayPal and upserts it. Status always comes from PayPal, never from us.
- * The sale is found by matching the dispute's seller_transaction_id to transactions.paypalCaptureId;
- * it is re-matched on every sync, so a sale that arrives later still gets linked.
- */
+/** Re-reads a dispute from PayPal and upserts it. Status always comes from PayPal, never from us. */
 export async function syncDispute(disputeId: string) {
   const detail = await getDispute(disputeId);
   // Old sandbox disputes that PayPal still holds must not come back after a data reset.

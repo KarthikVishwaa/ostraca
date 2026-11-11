@@ -13,8 +13,8 @@ export type DisputeContext = {
 const day = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
 
 /**
- * Builds the numbered facts a dispute response may stand on. Only things the code verified
- * or the seller confirmed become facts; AI suggestions that nobody confirmed never do.
+ * Builds the numbered facts a dispute response may stand on. Only things the code verified or the seller
+ * confirmed become facts; AI suggestions that nobody confirmed never do.
  */
 export async function buildFacts(sale: Transaction, dispute: DisputeContext) {
   const facts: Fact[] = [];

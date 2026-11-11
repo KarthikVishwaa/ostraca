@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { audit } from "@/db/audit";
+import { api, HttpError, parseJson, parseParam, jsonError } from "@/lib/api";
+import { logError } from "@/lib/log";
 import { MANUAL_FIELDS, validateField } from "@/lib/validation";
 import { proposeTracking } from "@/lib/tracking-proposal";
 import { captureContext, effectiveValue, recomputeReadiness } from "@/lib/proof";
@@ -14,21 +16,22 @@ const body = z.object({
 });
 
 /**
- * Seller confirms, edits, or manually enters one field. Edits are re-checked by the same
- * deterministic rules as AI suggestions; a rejected value can never be confirmed.
+ * Seller confirms, edits, or manually enters one field. Edits are re-checked by the same deterministic
+ * rules as AI suggestions; a rejected value can never be confirmed.
  */
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id: evidenceId } = await ctx.params;
-  const parsed = body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "field and a non-empty value are required" }, { status: 400 });
-  const { field, value } = parsed.data;
+export const PATCH = api<{ id: string }>({}, async ({ req, params }) => {
+  const evidenceId = parseParam(params.id, z.string().uuid(), "evidence not found");
+  const { field, value } = await parseJson(req, body).catch(() => {
+    throw new HttpError(400, "field and a non-empty value are required");
+  });
 
+  // The evidence must be linked to a sale.
   const [link] = await db()
     .select({ tx: schema.transactions })
     .from(schema.transactionEvidence)
     .innerJoin(schema.transactions, eq(schema.transactions.id, schema.transactionEvidence.transactionId))
     .where(eq(schema.transactionEvidence.evidenceId, evidenceId));
-  if (!link) return NextResponse.json({ error: "evidence not found" }, { status: 404 });
+  if (!link) throw new HttpError(404, "evidence not found");
 
   const [existing] = await db()
     .select()
@@ -36,11 +39,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     .where(and(eq(schema.evidenceExtractions.evidenceId, evidenceId), eq(schema.evidenceExtractions.field, field)));
 
   const raw = value ?? (existing ? effectiveValue(existing) : null);
-  if (!raw) return NextResponse.json({ error: "nothing to confirm; enter a value" }, { status: 400 });
+  if (!raw) throw new HttpError(400, "nothing to confirm; enter a value");
 
   const check = validateField(field, raw, captureContext(link.tx));
   if (check.status === "rejected") {
-    return NextResponse.json({ error: `Cannot use this value: ${check.note}` }, { status: 422 });
+    return jsonError(422, `Cannot use this value: ${check.note}`);
   }
 
   const values = { confirmedValue: check.aiValue ?? raw, status: check.status, checkNote: check.note };
@@ -53,6 +56,6 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const how = !existing ? "entered" : value && value !== existing.aiValue ? "edited" : "confirmed";
   await audit("seller", `field.${how}`, { type: "evidence", id: evidenceId }, { field, from: existing?.aiValue ?? null, to: values.confirmedValue, check: check.status });
   const result = await recomputeReadiness(link.tx.id);
-  await proposeTracking(link.tx.id).catch((e) => console.error("auto-queue failed", e)); // queues only; the seller still approves
+  await proposeTracking(link.tx.id).catch((e) => logError("auto-queue failed", e)); // queues only; the seller still approves
   return NextResponse.json({ field, status: check.status, note: check.note, score: result.score });
-}
+});

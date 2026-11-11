@@ -1,11 +1,4 @@
-import { NextResponse } from "next/server";
-import { PayPalError } from "@/lib/paypal/client";
-import { DisputeIgnoredError } from "@/lib/data-reset";
+import { errorResponse } from "@/lib/api";
 
-export function paypalErrorResponse(e: unknown) {
-  if (e instanceof DisputeIgnoredError) return NextResponse.json({ error: "dispute not found" }, { status: 404 });
-  if (e instanceof PayPalError) {
-    return NextResponse.json({ error: e.message, debug_id: e.debugId }, { status: e.status });
-  }
-  return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-}
+/** Kept for the routes that already call it. All error text goes through errorResponse (safe message + PayPal debug_id only). */
+export const paypalErrorResponse = errorResponse;

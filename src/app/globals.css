@@ -20,8 +20,8 @@
   --muted-foreground: oklch(0.5 0.015 60);
   --accent: oklch(0.94 0.025 60);
   --accent-foreground: oklch(0.25 0.01 60);
-  --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.6 0.13 155);
+  --destructive: oklch(0.54 0.23 27);
+  --success: oklch(0.5 0.12 155);
   --warning: oklch(0.75 0.15 80);
   --border: oklch(0.91 0.01 75);
   --input: oklch(0.91 0.01 75);
@@ -29,6 +29,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.17 0.008 60);
   --foreground: oklch(0.96 0.006 75);
   --card: oklch(0.21 0.01 60);
@@ -86,5 +87,68 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/*
+ * Page backdrop: a faint shard grid plus a soft clay glow at the top. Pure CSS, fixed (so it never repaints
+ * on scroll), faded out towards the bottom and kept at a few percent contrast in light and dark.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 70% 38% at 50% -6%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%),
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 4.5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 4.5%, transparent) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 35%, transparent 85%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 35%, transparent 85%);
+}
+.dark body::before {
+  background-image:
+    radial-gradient(ellipse 70% 38% at 50% -6%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 70%),
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px);
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Cards that can be opened lift 2px on hover. Transform only, and only on devices that hover. */
+@media (hover: hover) {
+  .lift {
+    transition: transform 0.2s cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* The numbers in tiles and tables should not jitter while they count. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .lift:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+@media print {
+  body::before {
+    display: none;
   }
 }

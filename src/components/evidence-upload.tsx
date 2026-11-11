@@ -5,7 +5,12 @@ import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { api, type SaleDTO } from "./sale-types";
+import { TaskProgress } from "@/components/ui/task-progress";
+import { uploadStream } from "@/lib/api-client";
+import type { SaleDTO } from "./sale-types";
+import { useStagedTask } from "./use-staged-task";
+
+type UploadAnswer = { aiError: string | null; manual: boolean; fieldCount: number; reused?: boolean; alreadyLinked?: boolean };
 
 const KINDS = [
   ["", "Let AI decide"],
@@ -17,14 +22,15 @@ const KINDS = [
   ["other", "Other"],
 ] as const;
 
-const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm shadow-xs";
+const selectClass = "h-11 w-full rounded-md border bg-background px-3 text-base shadow-xs md:h-9 md:text-sm";
 
 export function EvidenceUpload({ transactionId, ai, onDone }: { transactionId: string; ai: SaleDTO["ai"]; onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState("");
   const [manual, setManual] = useState(!ai.claude);
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const task = useStagedTask<UploadAnswer>();
 
   async function upload() {
     const file = fileRef.current?.files?.[0];
@@ -34,26 +40,30 @@ export function EvidenceUpload({ transactionId, ai, onDone }: { transactionId: s
     form.set("transactionId", transactionId);
     if (kind) form.set("kind", kind);
     if (manual) form.set("mode", "manual");
-    setBusy(true);
     setNotice(null);
-    try {
-      const res = await api<{ aiError: string | null; manual: boolean; fieldCount: number; reused?: boolean; alreadyLinked?: boolean }>("/api/evidence", { method: "POST", body: form });
-      if (res.reused) {
-        toast.info(res.alreadyLinked ? "Already in your proof record. This sale already uses this file." : "Already in your proof record. Linked to this sale without storing it twice.");
-      } else if (res.aiError) {
-        setNotice(`${res.aiError}. Your file is saved; add the details with Manual entry on the card below.`);
-      } else if (res.manual) {
-        toast.success("File saved. Add the details with Manual entry on the card below.");
-      } else {
-        toast.success(`File saved. AI suggested ${res.fieldCount} field(s). Review them below.`);
+    // Real stages: the browser reports the upload itself, the server then streams hashing, reading, checking, saving.
+    const r = await task.run((report) => uploadStream<UploadAnswer>("/api/evidence", form, report));
+    if (!r) return; // already running: ignore the second click
+    if (!r.ok) {
+      if (r.error.code === "ai_paused") {
+        setManual(true); // the file was not stored; the seller can retry right away without AI
+        setNotice("AI is paused for today. Manual entry is switched on: choose Save file again, then type the details in.");
+        task.reset();
       }
-      if (fileRef.current) fileRef.current.value = "";
-      onDone();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
+      return; // any other error: the real message and a Retry button are shown by <TaskProgress>
     }
+    const res = r.data;
+    if (res.reused) {
+      toast.info(res.alreadyLinked ? "Already in your proof record. This sale already uses this file." : "Already in your proof record. Linked to this sale without storing it twice.");
+    } else if (res.aiError) {
+      setNotice(res.aiError);
+    } else if (res.manual) {
+      toast.success("File saved. Add the details with Manual entry on the card below.");
+    } else {
+      toast.success(`File saved. AI suggested ${res.fieldCount} field(s). Review them below.`);
+    }
+    if (fileRef.current) fileRef.current.value = "";
+    onDone();
   }
 
   return (
@@ -74,7 +84,7 @@ export function EvidenceUpload({ transactionId, ai, onDone }: { transactionId: s
             ref={fileRef}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,audio/*"
-            className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-1.5 file:text-sm"
+            className="block w-full text-base file:mr-3 file:min-h-11 file:rounded-md file:border file:bg-secondary file:px-3 file:py-1.5 file:text-base md:text-sm md:file:min-h-0 md:file:text-sm"
           />
           <p className="text-xs text-muted-foreground">Max 8 MB. The original is stored unchanged with a SHA-256 fingerprint.</p>
         </div>
@@ -87,15 +97,16 @@ export function EvidenceUpload({ transactionId, ai, onDone }: { transactionId: s
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 pt-1 text-sm">
-            <input type="checkbox" checked={manual} onChange={(e) => setManual(e.target.checked)} disabled={!ai.claude} />
+          <label className="flex min-h-11 items-center gap-3 pt-1 text-sm md:min-h-0 md:gap-2">
+            <input type="checkbox" className="size-5 md:size-4" checked={manual} onChange={(e) => setManual(e.target.checked)} disabled={!ai.claude} />
             Manual entry (skip AI, I will type the details)
           </label>
         </div>
       </div>
-      <Button onClick={upload} disabled={busy}>
-        <Upload /> {busy ? (manual ? "Saving…" : "Reading…") : manual ? "Save file" : "Upload and read"}
+      <Button onClick={upload} disabled={task.running} className="w-full sm:w-auto">
+        <Upload /> {task.running ? (manual ? "Saving…" : "Reading…") : manual ? "Save file" : "Upload and read"}
       </Button>
+      <TaskProgress state={task.state} onRetry={task.retry} onDismiss={task.reset} title={manual ? "Saving the file" : "Uploading and reading the file"} />
       {notice && <p className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm">{notice}</p>}
     </div>
   );

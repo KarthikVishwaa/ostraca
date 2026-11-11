@@ -1,3 +1,5 @@
+import { request } from "@/lib/api-client";
+
 /** Shape of GET /api/transactions/[id] as the browser sees it (dates arrive as strings). */
 export type FieldDTO = {
   field: string;
@@ -53,12 +55,28 @@ export type SaleDTO = {
   ai: { claude: boolean; openai: boolean };
 };
 
-export async function api<T = unknown>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init);
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const d = data as { error?: string; debug_id?: string };
-    throw new Error(`${d.error ?? r.statusText}${d.debug_id ? ` (PayPal debug_id: ${d.debug_id})` : ""}`);
+/** An API failure with the server's safe message, plus its status and code ("rate_limited", "ai_paused", ...). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public retryAfter?: number,
+    public debugId?: string,
+    public problems?: string[]
+  ) {
+    super(message);
+    this.name = "ApiError";
   }
-  return data as T;
+}
+
+/**
+ * Convenience wrapper over `request` (src/lib/api-client.ts) for code that prefers try/catch: returns the
+ * data, or throws an ApiError with the same safe message. It never assumes the body is JSON.
+ */
+export async function api<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+  const r = await request<T>(url, init);
+  if (r.ok) return r.data;
+  const e = r.error;
+  throw new ApiError(`${e.message}${e.debugId ? ` (PayPal debug_id: ${e.debugId})` : ""}`, e.status, e.code, e.retryAfter, e.debugId, e.problems);
 }

@@ -1,13 +1,6 @@
 /**
- * The Proof Graph, as a plain relational model.
- *
- *   transactions ──< transaction_evidence >── evidence ──< evidence_extractions
- *        │
- *        ├──< disputes
- *        └──< agent_actions (approval queue)        audit_logs (append-only)
- *
- * One piece of evidence can be linked to many uses (hold, dispute, limitation pack)
- * through transaction_evidence. The original file is never modified (sha256 stored).
+ * The Proof Graph, as a plain relational model. transactions ──< transaction_evidence >── evidence ──<
+ * evidence_extractions │ ├──< disputes └──< agent_actions (approval queue) audit_logs (append-only)
  */
 import {
   pgTable,
@@ -19,6 +12,8 @@ import {
   uuid,
   pgEnum,
   uniqueIndex,
+  index,
+  primaryKey,
   customType,
 } from "drizzle-orm/pg-core";
 
@@ -37,6 +32,7 @@ export const fieldStatus = pgEnum("field_status", ["verified", "needs_review", "
 
 export const actionStatus = pgEnum("action_status", ["pending", "approved", "rejected", "executed", "failed"]);
 
+// The proof graph
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
   sellerId: text("seller_id").notNull().default("demo-seller"),
@@ -143,6 +139,26 @@ export const auditLogs = pgTable("audit_logs", {
   details: jsonb("details"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Platform tables (rate limits and webhook replay protection)
+
+/** Webhook event IDs already handled: a replayed or duplicated delivery is ignored. */
+export const webhookEvents = pgTable("webhook_events", {
+  eventId: text("event_id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Fixed-window counters for rate limits and the daily AI budget. */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.key, t.windowStart] }), index("rate_limits_window_idx").on(t.windowStart)]
+);
 
 export type Transaction = typeof transactions.$inferSelect;
 export type Evidence = typeof evidence.$inferSelect;

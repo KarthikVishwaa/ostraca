@@ -3,8 +3,8 @@ import { env } from "@/lib/env";
 import { paypal } from "./client";
 
 /**
- * Verifies a webhook with PayPal. Reject anything that doesn't return SUCCESS.
- * Requires PAYPAL_WEBHOOK_ID (from the Developer Dashboard → your app → Webhooks).
+ * Verifies a webhook with PayPal. Reject anything that doesn't return SUCCESS. Requires PAYPAL_WEBHOOK_ID
+ * (from the Developer Dashboard → your app → Webhooks).
  */
 export async function verifyWebhook(headers: Headers, event: unknown): Promise<boolean> {
   const webhookId = env().PAYPAL_WEBHOOK_ID;

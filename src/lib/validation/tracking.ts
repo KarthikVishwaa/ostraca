@@ -1,9 +1,8 @@
+import { splitSafe } from "@/lib/format";
 /**
- * Deterministic tracking-number checks. Pure functions — no AI, no network.
- *
- * Honest limits: the UPU S10 check digit only applies to international postal
- * items in the S10 format (e.g. EE123456789IN). Other formats are checked by
- * pattern only and reported as "format_only", never as fully verified.
+ * Deterministic tracking-number checks. Pure functions — no AI, no network. Honest limits: the UPU S10
+ * check digit only applies to international postal items in the S10 format (e.g. EE123456789IN). Other
+ * formats are checked by pattern only and reported as "format_only", never as fully verified.
  */
 
 export type TrackingCheck =
@@ -15,7 +14,7 @@ const S10 = /^([A-Z]{2})(\d{8})(\d)([A-Z]{2})$/;
 
 export function s10CheckDigit(eightDigits: string): number {
   const weights = [8, 6, 4, 2, 3, 5, 9, 7];
-  const sum = eightDigits.split("").reduce((acc, d, i) => acc + Number(d) * weights[i], 0);
+  const sum = splitSafe(eightDigits, "").reduce((acc, d, i) => acc + Number(d) * weights[i], 0);
   const c = 11 - (sum % 11);
   return c === 10 ? 0 : c === 11 ? 5 : c;
 }

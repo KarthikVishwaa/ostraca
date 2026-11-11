@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { rejectAction } from "@/lib/approvals";
+import { z } from "zod";
+import { api, notFound, parseParam, jsonError } from "@/lib/api";
+import { getAction, rejectAction } from "@/lib/approvals";
 
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
+export const POST = api<{ id: string }>({}, async ({ params }) => {
+  const id = parseParam(params.id, z.string().uuid(), "action not found");
+  if (!(await getAction(id))) throw notFound("action not found");
   const row = await rejectAction(id);
-  if (!row) return NextResponse.json({ error: "This action is not waiting for approval" }, { status: 409 });
+  if (!row) return jsonError(409, "This action is not waiting for approval");
   return NextResponse.json({ status: "rejected" });
-}
+});

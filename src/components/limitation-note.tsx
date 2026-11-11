@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { NOTE_STORAGE_KEY } from "@/lib/limitation-text";
+import { TaskProgress } from "@/components/ui/task-progress";
+import { requestStream } from "@/lib/api-client";
 import { api } from "./sale-types";
+import { useStagedTask } from "./use-staged-task";
 
 type Check = { ok: boolean; problems: string[] };
 type Generated = { note: null; message: string } | { note: string; source: "ai" | "template"; notice: string | null; check: Check; facts: Array<{ id: string; text: string }> };
@@ -43,26 +46,33 @@ export function LimitationNote({ aiOn, empty }: { aiOn: boolean; empty: boolean 
     }
   }, [note]);
 
-  async function generate() {
-    setBusy(true);
+  const task = useStagedTask<Generated>();
+
+  async function generate(template = false) {
     setMessage(null);
-    try {
-      const r = await api<Generated>("/api/limitation/note", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate" }),
-      });
-      if (r.note === null) return setMessage(r.message);
-      setNote(r.note);
-      setSource(r.source);
-      setNotice(r.notice);
-      setCheck(r.check);
-      setFacts(r.facts);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
+    const r = await task.run((report) =>
+      requestStream<Generated>(
+        "/api/limitation/note",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", ...(template ? { template: true } : {}) }) },
+        report
+      )
+    );
+    if (!r) return; // already running: ignore the second click
+    if (!r.ok) {
+      if (r.error.code === "ai_paused") {
+        toast.info("AI is paused for today. Using a plain template built from your numbers.");
+        task.reset();
+        return generate(true);
+      }
+      return; // the real error and a Retry button are shown by <TaskProgress>
     }
+    const d = r.data;
+    if (d.note === null) return setMessage(d.message);
+    setNote(d.note);
+    setSource(d.source);
+    setNotice(d.notice);
+    setCheck(d.check);
+    setFacts(d.facts);
   }
 
   useEffect(() => {
@@ -86,12 +96,13 @@ export function LimitationNote({ aiOn, empty }: { aiOn: boolean; empty: boolean 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={generate} disabled={busy || empty}>
+        <Button className="w-full sm:w-auto" onClick={() => generate()} disabled={task.running || busy || empty}>
           <Sparkles /> {note ? "Write it again" : aiOn ? "Write a cover note with AI" : "Write a plain template"}
         </Button>
         {!aiOn && <span className="text-xs text-muted-foreground">AI is off (ANTHROPIC_API_KEY not set). A template built from your numbers is used.</span>}
         <span className="text-xs text-muted-foreground">Optional. The pack works without it.</span>
       </div>
+      <TaskProgress state={task.state} onRetry={task.retry} onDismiss={task.reset} title="Writing the cover note" />
       {message && <p className="rounded-md border p-3 text-sm">{message}</p>}
       {notice && <p className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm">{notice}</p>}
       {source && (

@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, FileQuestion } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { DataBoundary } from "@/components/motion/data-boundary";
+import { SaleSkeleton } from "@/components/skeletons";
+import { Stagger } from "@/components/motion/stagger";
+import { Reveal } from "@/components/motion/reveal";
+import { dateTime, formatMoney, formatText, shortDate } from "@/lib/format";
+import { ScoreRing } from "./score-ring";
 import { EvidenceCard } from "./evidence-card";
 import { EvidenceUpload } from "./evidence-upload";
 import { ManualEntryForm } from "./manual-entry-form";
@@ -49,30 +54,40 @@ export function SaleDetail({ id }: { id: string }) {
   }, [id]);
   useEffect(load, [load]);
 
-  if (error) return <p className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not load this sale: {error}</p>;
-  if (!sale) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  return (
+    <DataBoundary ready={!!sale || !!error} skeleton={<SaleSkeleton />}>
+      {error ? (
+        <p role="alert" className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not load this sale: {error}</p>
+      ) : sale ? (
+        <SaleView sale={sale} id={id} load={load} />
+      ) : null}
+    </DataBoundary>
+  );
+}
 
+function SaleView({ sale, id, load }: { sale: SaleDTO; id: string; load: () => void }) {
   const t = sale.transaction;
   const tone = sale.readiness.level === "ready" ? "success" : sale.readiness.level === "partial" ? "warning" : "destructive";
   return (
     <div className="space-y-6">
-      <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/ledger" className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground md:min-h-0">
         <ArrowLeft className="size-4" /> Proof ledger
       </Link>
 
       <header className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t.itemDescription ?? "Sale"}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t.amount} {t.currency} · {t.buyerName ?? "Unknown buyer"}
-            {t.shipToCity ? ` · ${t.shipToCity}` : " · no ship-to city from PayPal"} · captured {new Date(t.capturedAt).toLocaleDateString()} · <span className="font-mono">{t.paypalCaptureId}</span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight break-words">{formatText(t.itemDescription, "Sale")}</h1>
+          <p className="text-sm text-muted-foreground break-words">
+            {formatMoney(t.amount, t.currency)} · {formatText(t.buyerName, "Unknown buyer")}
+            {t.shipToCity?.trim() ? ` · ${t.shipToCity.trim()}` : " · no ship-to city from PayPal"} · captured {shortDate(t.capturedAt)} · <span className="font-mono break-all">{t.paypalCaptureId}</span>
           </p>
         </div>
         <Badge variant={tone}>Readiness {sale.readiness.score}/100</Badge>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <Reveal>
           <Card>
             <CardHeader>
               <CardTitle>1. Add proof</CardTitle>
@@ -93,13 +108,21 @@ export function SaleDetail({ id }: { id: string }) {
               </Tabs>
             </CardContent>
           </Card>
+          </Reveal>
 
           <section className="space-y-4" aria-label="Evidence">
             <h2 className="text-lg font-semibold">2. Review what was found</h2>
             {sale.evidence.length ? (
-              sale.evidence.map((e) => <EvidenceCard key={e.id} item={e} onChanged={load} />)
+              <Stagger className="space-y-4">
+                {sale.evidence.map((e) => (
+                  <EvidenceCard key={e.id} item={e} onChanged={load} />
+                ))}
+              </Stagger>
             ) : (
-              <p className="text-sm text-muted-foreground">No evidence yet. Upload a file above.</p>
+              <div className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                <FileQuestion className="size-5 shrink-0" aria-hidden />
+                No evidence yet. Upload a file or type the details in above.
+              </div>
             )}
           </section>
 
@@ -114,49 +137,56 @@ export function SaleDetail({ id }: { id: string }) {
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Readiness score</CardTitle>
-              <CardDescription>Unconfirmed &quot;needs review&quot; fields do not count.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Progress value={sale.readiness.score} aria-label="Readiness score" />
-              <ul className="space-y-2 text-sm">
-                {sale.readiness.checks.map((c) => (
-                  <li key={c.key} className="flex items-start gap-2">
-                    {c.passed ? <CheckCircle2 className="mt-0.5 size-4 text-success" /> : <Circle className="mt-0.5 size-4 text-muted-foreground" />}
-                    <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">{c.weight}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity</CardTitle>
-              <CardDescription>Every step is logged.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {sale.activity.length ? (
-                <ol className="space-y-3">
-                  {sale.activity.map((a) => (
-                    <li key={a.id} className="text-sm">
-                      <p>{EVENT_LABEL[a.event] ?? a.event}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(a.createdAt).toLocaleString()} · {a.actor}
-                      </p>
-                      {detailText(a.details) && <p className="break-words text-xs text-muted-foreground">{detailText(a.details)}</p>}
+        {/* Sticky on wide screens; scrolls on its own if it is ever taller than the window. */}
+        <div className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto lg:pb-1 lg:pr-1">
+          <Reveal delay={0.06}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Readiness score</CardTitle>
+                <CardDescription>Unconfirmed &quot;needs review&quot; fields do not count.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                  <ScoreRing score={sale.readiness.score} level={sale.readiness.level} />
+                </div>
+                <Stagger as="ul" className="space-y-2 text-sm" aria-label="Score breakdown">
+                  {sale.readiness.checks.map((c) => (
+                    <li key={c.key} className="flex items-start gap-2">
+                      {c.passed ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-label="Passed" /> : <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label="Not yet" />}
+                      <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
+                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">{c.weight}</span>
                     </li>
                   ))}
-                </ol>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nothing yet.</p>
-              )}
-            </CardContent>
-          </Card>
+                </Stagger>
+              </CardContent>
+            </Card>
+          </Reveal>
+
+          <Reveal delay={0.12}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Activity</CardTitle>
+                <CardDescription>Every step is logged.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {sale.activity.length ? (
+                  <Stagger as="ol" className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                    {sale.activity.map((a) => (
+                      <li key={a.id} className="text-sm">
+                        <p>{EVENT_LABEL[a.event] ?? a.event}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {dateTime(a.createdAt)} · {formatText(a.actor)}
+                        </p>
+                        {detailText(a.details) && <p className="break-words text-xs text-muted-foreground">{detailText(a.details)}</p>}
+                      </li>
+                    ))}
+                  </Stagger>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nothing yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </Reveal>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">Sandbox only. No card or bank details are stored.</p>

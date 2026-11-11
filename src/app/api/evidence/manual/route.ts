@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { audit } from "@/db/audit";
+import { api, HttpError, parseJson } from "@/lib/api";
+import { logError } from "@/lib/log";
 import { validateField, type FieldResult, type ManualField } from "@/lib/validation";
 import { captureContext, recomputeReadiness } from "@/lib/proof";
 import { findEvidenceBySha, linkEvidence } from "@/lib/evidence-store";
@@ -18,17 +20,20 @@ const body = z.object({
 });
 
 /**
- * Manual entry, no AI. The typed values are saved as a tiny JSON record (so there is still an
- * original with a SHA-256), then every field goes through the same validation code as AI suggestions.
- * Values the seller typed count as confirmed, unless code rejects them (they stay visible, flagged).
+ * Manual entry, no AI. The typed values are saved as a tiny JSON record (so there is still an original
+ * with a SHA-256), then every field goes through the same validation code as AI suggestions.
  */
-export async function POST(req: Request) {
-  const parsed = body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Tracking number and carrier are required." }, { status: 400 });
-  const input = parsed.data;
+export const POST = api({}, async ({ req }) => {
+  const parsed = await parseJson(req, body).catch(() => {
+    throw new HttpError(400, "Tracking number and carrier are required.");
+  });
+  const input = parsed;
 
-  const [tx] = await db().select().from(schema.transactions).where(eq(schema.transactions.id, input.transactionId));
-  if (!tx) return NextResponse.json({ error: "transaction not found" }, { status: 404 });
+  const [tx] = await db()
+    .select()
+    .from(schema.transactions)
+    .where(eq(schema.transactions.id, input.transactionId));
+  if (!tx) throw new HttpError(404, "transaction not found");
 
   const entries: Array<[ManualField, string]> = [
     ["tracking_number", input.trackingNumber],
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
     const isNewLink = await linkEvidence(tx.id, dup.id);
     await audit("seller", "evidence.reused", { type: "evidence", id: dup.id }, { sha256, fileName: "manual-entry.json", newLinkToSale: isNewLink });
     await recomputeReadiness(tx.id);
-    await proposeTracking(tx.id).catch((e) => console.error("auto-queue failed", e)); // queues only; the seller still approves
+    await proposeTracking(tx.id).catch((e) => logError("auto-queue failed", e)); // queues only; the seller still approves
     return NextResponse.json({ evidenceId: dup.id, reused: true, alreadyLinked: !isNewLink, checks });
   }
 
@@ -76,6 +81,6 @@ export async function POST(req: Request) {
     await audit("seller", c.status === "rejected" ? "field.rejected_by_check" : "field.entered", { type: "evidence", id: ev.id }, { field: c.field, to: c.aiValue, check: c.status });
   }
   const result = await recomputeReadiness(tx.id);
-  await proposeTracking(tx.id).catch((e) => console.error("auto-queue failed", e)); // queues only; the seller still approves
+  await proposeTracking(tx.id).catch((e) => logError("auto-queue failed", e)); // queues only; the seller still approves
   return NextResponse.json({ evidenceId: ev.id, reused: false, checks, score: result.score });
-}
+});

@@ -1,6 +1,7 @@
 import "server-only";
 import { db, schema } from "./index";
 
+/** Append-only log. Details are stored as given: never put secrets, tokens or file contents in them. */
 export async function audit(
   actor: "seller" | "system" | "ai" | "paypal_webhook",
   event: string,

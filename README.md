@@ -1,6 +1,15 @@
-# Ostraca
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/logo-full-dark.svg">
+    <img src="public/brand/logo-full.svg" alt="Ostraca" height="96">
+  </picture>
+</p>
 
-**Prove it before they ask.** Ostraca keeps an AI-verified proof record for every PayPal sale, so small sellers can answer holds, disputes and account limitations in minutes instead of days.
+<p align="center"><strong>Prove it before they ask.</strong></p>
+
+<p align="center">Built with <img src="src/assets/paypal.png" alt="PayPal" height="40" align="middle"> APIs (sandbox)</p>
+
+Ostraca keeps an AI-verified proof record for every PayPal sale, so small sellers can answer holds, disputes and account limitations in minutes instead of days.
 
 Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/). Runs entirely on the **PayPal sandbox**.
 
@@ -164,3 +173,7 @@ npx shadcn@latest add dialog table dropdown-menu
 
 ## License
 [MIT](./LICENSE)
+
+---
+
+Ostraca is an independent hackathon project. It is not affiliated with or endorsed by PayPal.

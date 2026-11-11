@@ -57,7 +57,7 @@ export function ManualEntryForm({ transactionId, onDone }: { transactionId: stri
           <Input id="m-city" value={v.destinationCity} onChange={set("destinationCity")} />
         </div>
       </div>
-      <Button type="submit" disabled={busy || !v.trackingNumber.trim() || !v.carrier.trim()}>
+      <Button className="w-full sm:w-auto" type="submit" disabled={busy || !v.trackingNumber.trim() || !v.carrier.trim()}>
         {busy ? "Checking…" : "Save and check"}
       </Button>
     </form>

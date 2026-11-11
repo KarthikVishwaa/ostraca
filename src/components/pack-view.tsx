@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import type { PackData } from "@/lib/limitation";
 import { NOTE_STORAGE_KEY, NOT_SENT } from "@/lib/limitation-text";
 import { PACK_CSS, PackDocument } from "./pack-document";
+import { request } from "@/lib/api-client";
 import { api } from "./sale-types";
 
 const logEvent = (event: "export_print" | "export_download") =>
-  fetch("/api/limitation/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) }).catch(() => null);
+  request("/api/limitation/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) });
 
 /** The print-friendly page. Save as PDF with the browser's Print dialog, or download one self-contained HTML file. */
 export function PackView() {

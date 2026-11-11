@@ -1,6 +1,6 @@
 /**
- * Freeze Readiness Score — computed in code, explained (optionally) by AI.
- * R = Σ wᵢ·cᵢ, cᵢ ∈ {0,1}. Weights are a starting point; tune them as you build.
+ * Freeze Readiness Score — computed in code, explained (optionally) by AI. R = Σ wᵢ·cᵢ, cᵢ ∈ {0,1}.
+ * Weights are a starting point; tune them as you build.
  */
 
 export type ReadinessInput = {

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { shortDate, shortId } from "@/lib/format";
 import { api, type EvidenceDTO, type FieldDTO } from "./sale-types";
 
 const LABELS: Record<string, string> = {
@@ -120,7 +121,7 @@ function ManualEntry({ evidenceId, existing, onChanged }: { evidenceId: string; 
         <select
           value={field || options[0]}
           onChange={(e) => setField(e.target.value)}
-          className="h-9 rounded-md border bg-background px-3 text-sm shadow-xs"
+          className="h-11 rounded-md border bg-background px-3 text-base shadow-xs md:h-9 md:text-sm"
           aria-label="Field to add"
         >
           {options.map((o) => (
@@ -147,7 +148,7 @@ export function EvidenceCard({ item, onChanged }: { item: EvidenceDTO; onChanged
           <a href={`/api/evidence/${item.id}/file`} target="_blank" rel="noreferrer" className="underline underline-offset-2">
             View original
           </a>{" "}
-          · SHA-256 <span className="font-mono">{item.sha256.slice(0, 16)}…</span> · {(item.sizeBytes / 1024).toFixed(0)} KB · added {new Date(item.uploadedAt).toLocaleDateString()}
+          · SHA-256 <span className="font-mono">{shortId(item.sha256, 16)}</span> · {(item.sizeBytes / 1024).toFixed(0)} KB · added {shortDate(item.uploadedAt)}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">Reused as proof for:</span>

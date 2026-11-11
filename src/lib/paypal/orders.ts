@@ -37,8 +37,8 @@ export function captureOrder(orderId: string) {
 }
 
 /**
- * Orders v2 shipment tracking. carrier is a PayPal carrier enum (e.g. "INDIA_POST", "DHL", "FEDEX").
- * Use carrier "OTHER" + carrierNameOther for anything not in the enum.
+ * Orders v2 shipment tracking. carrier is a PayPal carrier enum (e.g. "INDIA_POST", "DHL", "FEDEX"). Use
+ * carrier "OTHER" + carrierNameOther for anything not in the enum.
  */
 export function addTracking(input: {
   orderId: string;

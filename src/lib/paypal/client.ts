@@ -1,12 +1,7 @@
 import "server-only";
 import { env } from "@/lib/env";
 
-/**
- * Minimal, typed PayPal REST client (sandbox only).
- * - Caches the OAuth token until shortly before it expires.
- * - Sends PayPal-Request-Id on writes so retries can't double-submit.
- * - Throws PayPalError with PayPal's debug_id, which you need when asking PayPal for help.
- */
+/** Minimal, typed PayPal REST client (sandbox only). */
 
 export class PayPalError extends Error {
   constructor(

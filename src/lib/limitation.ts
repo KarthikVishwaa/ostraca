@@ -7,8 +7,8 @@ import { PayPalError } from "@/lib/paypal/client";
 import type { Fact } from "@/lib/validation/draft";
 
 /**
- * LIMITATION PACK data. Everything here is computed in code from PayPal's report and our own proof
- * record. No AI. It only describes records; nothing here claims to change PayPal's decision.
+ * LIMITATION PACK data. Everything here is computed in code from PayPal's report and our own proof record.
+ * No AI. It only describes records; nothing here claims to change PayPal's decision.
  */
 export const WINDOW_DAYS = 30;
 
@@ -79,7 +79,7 @@ export async function buildPack(now = new Date(), deps: { search: typeof searchT
   const end = now;
   const start = new Date(end.getTime() - WINDOW_DAYS * 864e5);
 
-  // 1. PayPal's own report. A failure is shown to the seller as-is, and we fall back to our records.
+  // PayPal's own report. A failure is shown to the seller as-is, and we fall back to our records.
   let search: SearchStatus;
   const listed: Array<{ id: string; date: string; amount: string; currency: string; buyer: string | null }> = [];
   try {
@@ -117,11 +117,11 @@ export async function buildPack(now = new Date(), deps: { search: typeof searchT
     search = { ok: false, error: (e as Error).message, debugId: e instanceof PayPalError ? e.debugId : undefined };
   }
 
-  // 2. Our proof record: every sale in the window (also used as the fallback list).
+  // Our proof record: every sale in the window (also used as the fallback list).
   const ours = await db().select().from(schema.transactions).where(gte(schema.transactions.capturedAt, start)).orderBy(desc(schema.transactions.capturedAt));
   const byCapture = new Map(ours.map((t) => [t.paypalCaptureId, t]));
 
-  // 3. Proof details for every matched sale, in two queries.
+  // Proof details for every matched sale, in two queries.
   const matchedSales = [...new Map([...listed.map((l) => byCapture.get(l.id)), ...ours].filter((x): x is NonNullable<typeof x> => !!x).map((t) => [t.id, t])).values()];
   const saleIds = matchedSales.map((t) => t.id);
   const links = saleIds.length
@@ -181,7 +181,7 @@ export async function buildPack(now = new Date(), deps: { search: typeof searchT
   }
   rows.sort((a, b) => b.date.localeCompare(a.date));
 
-  // 4. Summary, all counted here.
+  // Summary, all counted here.
   const currencies = [...new Set(rows.map((r) => r.currency))];
   const sum = (rs: PackRow[]) => money(rs.reduce((s, r) => s + Number(r.amount), 0));
   const summary: PackData["summary"] = {

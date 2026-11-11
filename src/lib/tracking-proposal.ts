@@ -10,8 +10,8 @@ import { toPayPalCarrier } from "@/lib/paypal/carriers";
 export type Proposal = { ok: true; action: typeof schema.agentActions.$inferSelect } | { ok: false; reason: string };
 
 /**
- * Queue "file tracking with PayPal" as a PENDING action, built from seller-confirmed values only.
- * It never calls PayPal. `revive` re-queues one the seller rejected earlier (only when they ask again).
+ * Queue "file tracking with PayPal" as a PENDING action, built from seller-confirmed values only. It never
+ * calls PayPal. `revive` re-queues one the seller rejected earlier (only when they ask again).
  */
 export async function proposeTracking(transactionId: string, opts: { revive?: boolean } = {}): Promise<Proposal> {
   const [tx] = await db().select().from(schema.transactions).where(eq(schema.transactions.id, transactionId));

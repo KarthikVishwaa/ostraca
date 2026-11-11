@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadScript, type PayPalNamespace } from "@paypal/paypal-js";
 import { toast } from "sonner";
+import { request } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Load the SDK once per page. Strict Mode's double effect and re-renders share this promise.
 // A failed load clears the cache so "Try again" really retries.
@@ -59,20 +62,18 @@ export function PayPalCheckout({ amount, description }: { amount: string; descri
         buttons = paypal.Buttons({
           style: { layout: "vertical", shape: "rect" },
           createOrder: async () => {
-            const r = await fetch("/api/paypal/orders", {
+            const r = await request<{ id: string }>("/api/paypal/orders", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ amount, currency: "USD", description }),
             });
-            const data = await r.json();
-            if (!r.ok) throw new Error(data.error);
-            return data.id;
+            if (!r.ok || !r.data.id) throw new Error(r.ok ? "PayPal did not return an order." : r.error.message);
+            return r.data.id;
           },
           onApprove: async ({ orderID }) => {
-            const r = await fetch(`/api/paypal/orders/${orderID}/capture`, { method: "POST" });
-            const data = await r.json();
-            if (!r.ok) return void toast.error(`Capture failed: ${data.error}`);
-            toast.success(`Paid. Capture ${data.captureId} added to your proof ledger.`);
+            const r = await request<{ captureId: string }>(`/api/paypal/orders/${encodeURIComponent(orderID)}/capture`, { method: "POST" });
+            if (!r.ok) return void toast.error(`Capture failed: ${r.error.message}`);
+            toast.success(`Paid. Capture ${r.data.captureId} added to your proof ledger.`);
           },
           onError: (err) => {
             console.error("PayPal button error", err);
@@ -99,14 +100,19 @@ export function PayPalCheckout({ amount, description }: { amount: string; descri
   if (!clientId) return <p className="text-sm text-destructive">Set NEXT_PUBLIC_PAYPAL_CLIENT_ID in .env</p>;
   return (
     <div>
-      {state.status === "loading" && <p className="text-sm text-muted-foreground">Loading PayPal…</p>}
+      {state.status === "loading" && (
+        <div className="space-y-2" role="status" aria-label="Loading PayPal">
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+        </div>
+      )}
       {state.status === "error" && (
         <div className="space-y-1 text-sm">
           <p className="text-destructive">Could not load PayPal buttons.</p>
           <p className="font-mono text-xs text-muted-foreground">{state.hint}</p>
-          <button type="button" onClick={retry} className="underline underline-offset-2">
+          <Button type="button" variant="outline" onClick={retry} className="w-full sm:w-auto">
             Try again
-          </button>
+          </Button>
         </div>
       )}
       <div ref={ref} />

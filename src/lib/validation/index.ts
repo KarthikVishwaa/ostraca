@@ -1,3 +1,4 @@
+import { splitSafe } from "@/lib/format";
 import type { Extraction } from "@/lib/ai/extract";
 import { checkTracking, normalizeTracking } from "./tracking";
 import { reconcileAmount } from "./amount";
@@ -18,8 +19,8 @@ type CaptureContext = {
 };
 
 /**
- * VALIDATION ENGINE — deterministic checks on AI suggestions.
- * AI confidence alone never makes a field "verified".
+ * VALIDATION ENGINE — deterministic checks on AI suggestions. AI confidence alone never makes a field
+ * "verified".
  */
 export function validateExtraction(x: Extraction, tx: CaptureContext): FieldResult[] {
   const out: FieldResult[] = [];
@@ -110,14 +111,14 @@ const BLANK: Extraction = {
 };
 
 /**
- * Re-check ONE value the seller typed or edited, with the same rules as an AI suggestion.
- * `aiValue` in the result is the normalised value to store as the confirmed value.
+ * Re-check ONE value the seller typed or edited, with the same rules as an AI suggestion. `aiValue` in the
+ * result is the normalised value to store as the confirmed value.
  */
 export function validateField(field: ManualField, value: string, tx: CaptureContext): FieldResult {
   const v = value.trim();
   const x: Extraction = { ...BLANK };
   if (field === "amount") {
-    const [amount, currency] = v.split(/\s+/);
+    const [amount, currency] = splitSafe(v, /\s+/);
     x.amount = amount ?? null;
     x.currency = currency ?? null;
   } else {

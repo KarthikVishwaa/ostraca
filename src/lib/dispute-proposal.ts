@@ -25,8 +25,8 @@ export async function loadDispute(id: string) {
 export type Failure = { ok: false; status: number; reason: string; problems?: string[] };
 
 /**
- * Queue "submit this evidence to PayPal" as a PENDING action. The text is re-checked here against
- * fresh facts, so a client can never queue a draft that did not pass. Nothing is sent to PayPal.
+ * Queue "submit this evidence to PayPal" as a PENDING action. The text is re-checked here against fresh
+ * facts, so a client can never queue a draft that did not pass. Nothing is sent to PayPal.
  */
 export async function proposeEvidence(disputeId: string, draft: string) {
   const d = await loadDispute(disputeId);
@@ -74,8 +74,8 @@ export async function proposeEvidence(disputeId: string, draft: string) {
 }
 
 /**
- * Run BEFORE approval is recorded. Re-reads the dispute from PayPal and refuses unless PayPal
- * currently offers provide_evidence, and the stored text still passes the checks against today's facts.
+ * Run BEFORE approval is recorded. Re-reads the dispute from PayPal and refuses unless PayPal currently
+ * offers provide_evidence, and the stored text still passes the checks against today's facts.
  */
 export async function precheckEvidence(payload: { paypalDisputeId: string; draft: string }): Promise<{ ok: true } | Failure> {
   const d = await loadDispute(payload.paypalDisputeId);

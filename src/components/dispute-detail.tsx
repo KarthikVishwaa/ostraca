@@ -5,11 +5,16 @@ import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { DataBoundary } from "@/components/motion/data-boundary";
+import { DisputeDetailSkeleton } from "@/components/skeletons";
+import { Reveal } from "@/components/motion/reveal";
+import { Stagger } from "@/components/motion/stagger";
 import { DisputeApproval } from "./dispute-approval";
 import { DraftPanel } from "./dispute-draft";
 import { SandboxBox } from "./dispute-sandbox";
-import { statusLabel, type DisputeView } from "./dispute-types";
+import { statusLabel, type DisputeView as DisputeViewData } from "./dispute-types";
 import { usePolled } from "./use-polled";
+import { dateTime, formatMoney, formatText, shortDate, shortId, statusText } from "@/lib/format";
 
 const EVENT_LABEL: Record<string, string> = {
   "dispute.synced": "First read from PayPal",
@@ -37,26 +42,30 @@ function detailText(d: unknown) {
 }
 
 export function DisputeDetail({ id }: { id: string }) {
-  const { data: v, error, updatedAt, refresh } = usePolled<DisputeView>(`/api/disputes/${id}`);
+  const { data: v, error, updatedAt, refresh } = usePolled<DisputeViewData>(`/api/disputes/${id}`);
 
-  if (!v) {
-    return error ? (
-      <p className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not read this dispute from PayPal: {error}</p>
-    ) : (
-      <p className="text-sm text-muted-foreground">Reading the dispute from PayPal…</p>
-    );
-  }
+  return (
+    <DataBoundary ready={!!v || !!error} skeleton={<DisputeDetailSkeleton />}>
+      {!v ? (
+        <p role="alert" className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">Could not read this dispute from PayPal: {error}</p>
+      ) : (
+        <DisputeView v={v} error={error} updatedAt={updatedAt} refresh={refresh} />
+      )}
+    </DataBoundary>
+  );
+}
 
+function DisputeView({ v, error, updatedAt, refresh }: { v: DisputeViewData; error: string | null; updatedAt: Date | null; refresh: () => void }) {
   const d = v.dispute;
   return (
     <div className="space-y-6">
-      <Link href="/disputes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/disputes" className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground md:min-h-0">
         <ArrowLeft className="size-4" /> Disputes
       </Link>
 
       <header className="space-y-1">
-        <h1 className="flex flex-wrap items-center gap-2 font-mono text-2xl font-semibold tracking-tight">
-          {d.id}
+        <h1 className="flex flex-wrap items-center gap-2 font-mono text-xl font-semibold tracking-tight sm:text-2xl">
+          <span className="break-all">{d.id}</span>
           <Badge variant="secondary">{statusLabel(d.status)}</Badge>
           {d.stage && <Badge variant="outline">{statusLabel(d.stage)}</Badge>}
         </h1>
@@ -67,13 +76,14 @@ export function DisputeDetail({ id }: { id: string }) {
       </header>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <Reveal>
           <Card>
             <CardHeader>
               <CardTitle>The dispute</CardTitle>
               <CardDescription>
-                {statusLabel(d.reason)} · {d.amount?.value} {d.amount?.currency_code}
-                {d.due ? ` · you must respond by ${new Date(d.due).toLocaleDateString()}` : ""}
+                {statusLabel(d.reason)} · {formatMoney(d.amount?.value, d.amount?.currency_code)}
+                {d.due ? ` · you must respond by ${shortDate(d.due)}` : ""}
                 {d.outcome ? ` · outcome: ${statusLabel(d.outcome)}` : ""}
               </CardDescription>
             </CardHeader>
@@ -82,7 +92,7 @@ export function DisputeDetail({ id }: { id: string }) {
                 d.messages.map((m, i) => (
                   <div key={i} className="rounded-md bg-muted p-3 text-sm">
                     <p className="text-xs text-muted-foreground">
-                      {m.by.toLowerCase()} · {new Date(m.time).toLocaleString()}
+                      {formatText(m.by, "unknown").toLowerCase()} · {dateTime(m.time)}
                     </p>
                     <p className="whitespace-pre-wrap break-words">{m.content}</p>
                   </div>
@@ -92,6 +102,7 @@ export function DisputeDetail({ id }: { id: string }) {
               )}
             </CardContent>
           </Card>
+          </Reveal>
 
           <Card>
             <CardHeader>
@@ -126,11 +137,11 @@ export function DisputeDetail({ id }: { id: string }) {
                 <>
                   <p>
                     <Link href={`/sales/${v.sale.id}`} className="font-medium underline underline-offset-2">
-                      {v.sale.item ?? "Sale"}
+                      {formatText(v.sale.item, "Sale")}
                     </Link>
                     <br />
                     <span className="text-muted-foreground">
-                      {v.sale.amount} {v.sale.currency} · {v.sale.buyer ?? "unknown buyer"}
+                      {formatMoney(v.sale.amount, v.sale.currency)} · {formatText(v.sale.buyer, "unknown buyer")}
                     </span>
                   </p>
                   <div className="space-y-1">
@@ -150,19 +161,19 @@ export function DisputeDetail({ id }: { id: string }) {
             </CardHeader>
             <CardContent>
               {v.evidence.length ? (
-                <ul className="space-y-3 text-sm">
+                <Stagger as="ul" className="space-y-3 text-sm">
                   {v.evidence.map((e) => (
                     <li key={e.id}>
                       <p className="break-words">{e.fileName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {e.kind.replace(/_/g, " ")} · SHA-256 <span className="font-mono">{e.sha256.slice(0, 10)}…</span>
+                        {statusText(e.kind)} · SHA-256 <span className="font-mono">{shortId(e.sha256)}</span>
                       </p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {e.usedFor.length ? e.usedFor.map((u) => <Badge key={u} variant="success">{u}</Badge>) : <span className="text-xs text-muted-foreground">not confirmed yet</span>}
                       </div>
                     </li>
                   ))}
-                </ul>
+                </Stagger>
               ) : (
                 <p className="text-sm text-muted-foreground">No evidence yet. Add proof on the sale page.</p>
               )}
@@ -176,17 +187,17 @@ export function DisputeDetail({ id }: { id: string }) {
             </CardHeader>
             <CardContent>
               {v.activity.length ? (
-                <ol className="space-y-3">
+                <Stagger as="ol" className="max-h-80 space-y-3 overflow-y-auto pr-1">
                   {v.activity.map((a) => (
                     <li key={a.id} className="text-sm">
                       <p>{EVENT_LABEL[a.event] ?? a.event}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(a.createdAt).toLocaleString()} · {a.actor}
+                        {dateTime(a.createdAt)} · {formatText(a.actor)}
                       </p>
                       {detailText(a.details) && <p className="break-words text-xs text-muted-foreground">{detailText(a.details)}</p>}
                     </li>
                   ))}
-                </ol>
+                </Stagger>
               ) : (
                 <p className="text-sm text-muted-foreground">Nothing yet.</p>
               )}

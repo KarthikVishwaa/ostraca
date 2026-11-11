@@ -4,9 +4,8 @@ import { db, schema } from "@/db";
 import { audit } from "@/db/audit";
 
 /**
- * APPROVAL QUEUE (agent_actions). Every PayPal write is proposed here as `pending`,
- * approved by the seller, and only then executed. This module never calls PayPal.
- * The idempotency key is unique, so proposing the same thing twice returns the same row.
+ * APPROVAL QUEUE (agent_actions). Every PayPal write is proposed here as `pending`, approved by the
+ * seller, and only then executed.
  */
 export async function proposeAction(
   input: {
@@ -36,7 +35,7 @@ export async function proposeAction(
   return existing;
 }
 
-/** pending → approved (or failed → approved, to retry). Returns null if it is not approvable (e.g. already executed). */
+/** pending → approved (or failed → approved, to retry). Atomic, so a double click cannot run it twice. Null if not approvable. */
 export async function approveAction(id: string, by = "seller") {
   const [row] = await db()
     .update(schema.agentActions)

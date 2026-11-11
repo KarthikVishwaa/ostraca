@@ -1,6 +1,7 @@
 "use client";
 
 import type { PackData } from "@/lib/limitation";
+import { formatMoney, formatText, shortDate } from "@/lib/format";
 import { NOT_SENT, NO_PROMISE, SIMULATED_BANNER } from "@/lib/limitation-text";
 
 /**
@@ -28,7 +29,7 @@ tr,.pk-card{break-inside:avoid}
 @media print{.no-print{display:none!important} #pack{padding:0;max-width:none}}
 `;
 
-const d = (s: string) => new Date(s).toLocaleDateString();
+const d = (s: string | null | undefined) => shortDate(s);
 const yn = (b: boolean) => (b ? "Yes" : "No");
 
 export function PackDocument({ data, note }: { data: PackData; note: string }) {
@@ -78,8 +79,8 @@ export function PackDocument({ data, note }: { data: PackData; note: string }) {
           {data.rows.map((r) => (
             <tr key={r.key}>
               <td>{d(r.date)}</td>
-              <td>{r.amount} {r.currency}</td>
-              <td>{r.buyer ?? "—"}</td>
+              <td>{formatMoney(r.amount, r.currency)}</td>
+              <td>{formatText(r.buyer)}</td>
               <td className="pk-mono">{r.captureId}</td>
               <td className={r.matched ? "" : "pk-bad"}>{r.matched ? "Matched" : "No proof on file"}</td>
               <td>{r.readinessScore ?? "—"}</td>

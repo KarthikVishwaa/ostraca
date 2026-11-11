@@ -1,67 +1,78 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { audit } from "@/db/audit";
+import { api, HttpError, parseJson, parseParam } from "@/lib/api";
+import { describeAiFailure, templateNotice } from "@/lib/ai-errors";
 import { env } from "@/lib/env";
-import { paypalErrorResponse } from "@/lib/http";
+import { logError } from "@/lib/log";
+import { aiGate } from "@/lib/rate-limit";
+import { respond } from "@/lib/stream";
 import { disputeIdSchema, loadDispute } from "@/lib/dispute-proposal";
 import { draftDisputeResponse } from "@/lib/ai/dispute-draft";
 import { buildTemplate, checkDraft } from "@/lib/validation/draft";
 
 const body = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("generate") }),
+  // `template: true` skips AI entirely (used when AI is paused); it costs nothing and is not counted.
+  z.object({ action: z.literal("generate"), template: z.boolean().optional() }),
   z.object({ action: z.literal("check"), draft: z.string().max(6000) }),
 ]);
 
-/**
- * generate: AI (or a plain template) writes a draft from the numbered facts; code then checks it.
- * check:    re-checks text the seller edited. Nothing here is saved or sent to PayPal.
- */
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const id = disputeIdSchema.safeParse((await ctx.params).id);
-  const input = body.safeParse(await req.json().catch(() => null));
-  if (!id.success || !input.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
+/** generate: AI (or a plain template) writes a draft from the numbered facts; code then checks it. */
+export const POST = api<{ id: string }>({}, async ({ req, params, ip }) => {
+  const id = parseParam(params.id, disputeIdSchema, "dispute not found");
+  const input = await parseJson(req, body);
 
-  try {
-    const d = await loadDispute(id.data);
+  if (input.action === "check") {
+    const d = await loadDispute(id);
+    if (!d.built) return NextResponse.json({ check: { ok: false, problems: ["No matching sale for this dispute."], cited: [] } });
+    return NextResponse.json({ check: checkDraft(input.draft, d.built.facts) });
+  }
+
+  return respond(req, async (emit) => {
+    emit("facts", "Collecting verified facts", 4);
+    const d = await loadDispute(id); // re-reads the dispute from PayPal and builds the numbered facts
+    emit("facts", "Collecting verified facts", 15);
     if (!d.sale || !d.built) {
-      return NextResponse.json({ draft: null, reason: "no_sale", message: "No matching sale for this dispute, so there is nothing to cite.", missing: [] });
+      return { draft: null, reason: "no_sale", message: "No matching sale for this dispute, so there is nothing to cite.", missing: [] as string[] };
     }
     const { facts, missing, hasProof } = d.built;
-
-    if (input.data.action === "check") {
-      return NextResponse.json({ check: checkDraft(input.data.draft, facts) });
-    }
-
     if (!hasProof) {
-      return NextResponse.json({
+      return {
         draft: null,
         reason: "no_proof",
         message: "There is no verified proof on file for this sale yet, so there is nothing honest to say. Nothing was invented.",
         missing,
-      });
+      };
     }
 
     let draft: string;
     let source: "ai" | "template" = "ai";
     let notice: string | null = null;
-    if (!env().ANTHROPIC_API_KEY) {
+    if (input.template) {
       source = "template";
-      notice = "AI drafting is off (ANTHROPIC_API_KEY is not set). Here is a plain template built from your facts.";
+      notice = "Here is a plain template built from your facts.";
+      draft = buildTemplate(facts);
+    } else if (!env().ANTHROPIC_API_KEY) {
+      source = "template";
+      notice = templateNotice("AI is not set up (no API key)", "facts");
       draft = buildTemplate(facts);
     } else {
+      const gate = await aiGate(ip);
+      if (!gate.ok) throw new HttpError(gate.status, gate.error, gate.code, { retryAfter: gate.retryAfter });
+      emit("writing", "Writing the draft", 15);
       try {
-        draft = await draftDisputeResponse({ facts, reason: d.detail.reason });
+        draft = await draftDisputeResponse({ facts, reason: d.detail.reason ?? "unspecified" }, (f) => emit("writing", "Writing the draft", 15 + f * 64)); // never reaches 80 before the model is done
       } catch (e) {
-        console.error("dispute draft failed", e);
+        logError("dispute draft failed", e);
         source = "template";
-        notice = `AI drafting failed (${(e as Error).message}). Here is a plain template built from your facts.`;
+        notice = templateNotice(describeAiFailure(e), "facts");
         draft = buildTemplate(facts);
       }
     }
+    emit("checking", "Checking every citation and number", 82);
     const check = checkDraft(draft, facts);
+    emit("checking", "Checking every citation and number", 95);
     await audit(source === "ai" ? "ai" : "system", "dispute.draft_generated", { type: "dispute", id: d.detail.dispute_id }, { source, ok: check.ok, problems: check.problems.length });
-    return NextResponse.json({ draft, source, notice, check, missing });
-  } catch (e) {
-    return paypalErrorResponse(e);
-  }
-}
+    return { draft, source, notice, check, missing };
+  });
+});

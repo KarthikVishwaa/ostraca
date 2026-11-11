@@ -5,11 +5,9 @@ import type { Transaction, EvidenceExtraction } from "@/db/schema";
 import { readiness } from "@/lib/readiness";
 
 /**
- * Glue between stored evidence and the readiness score. No AI, no PayPal.
- *
- * Counting rule: a field supports the score only if code verified it, or the seller
- * confirmed/edited it. A `needs_review` field the seller has not touched counts for nothing,
- * and a `rejected` one never counts.
+ * Glue between stored evidence and the readiness score. No AI, no PayPal. Counting rule: a field supports
+ * the score only if code verified it, or the seller confirmed/edited it. A `needs_review` field the seller
+ * has not touched counts for nothing, and a `rejected` one never counts.
  */
 export type Use = "hold" | "dispute" | "limitation";
 
