@@ -32,6 +32,7 @@ export default defineConfig({
   outputDir: "test-results",
   use: { baseURL: `http://localhost:${PORT_MAIN}`, ...base },
   projects: [
+    { name: "unit", testMatch: /\.unit\.spec\.ts$/ },
     { name: "desktop", testMatch: /\.(desktop|both)\.spec\.ts$/, use: { ...desktop } },
     {
       name: "mobile",

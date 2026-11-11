@@ -20,11 +20,13 @@ export const POST = api<{ id: string }>({ limit: "paypal-write" }, async ({ req,
   if (!["pending", "failed"].includes(pending.status)) throw new HttpError(409, "This action is not waiting for approval");
 
   return respond(req, async (emit) => {
+    let toSend = pending;
     // Dispute evidence is only ever sent if PayPal says so right now. If not, nothing is approved or sent.
     if (pending.type === "provide_evidence") {
       emit("recheck", "Re-reading the dispute from PayPal", 8);
       const pre = await precheckEvidence(pending.payload as { paypalDisputeId: string; draft: string });
       if (!pre.ok) throw new HttpError(pre.status, pre.reason, undefined, { problems: pre.problems });
+      toSend = { ...pending, payload: { ...(pending.payload as object), evidences: pre.evidences } }; // what PayPal accepts right now
       emit("recheck", "Re-reading the dispute from PayPal", 35);
     } else {
       emit("recheck", "Checking the request", 30);
@@ -35,7 +37,7 @@ export const POST = api<{ id: string }>({ limit: "paypal-write" }, async ({ req,
 
     emit("send", "Sending to PayPal", 45);
     try {
-      const response = await executeAction(action);
+      const response = await executeAction({ ...action, payload: toSend.payload });
       await markExecuted(id, response);
       emit("status", "Reading the new status from PayPal", 75);
       if (action.type === "add_tracking" && action.transactionId) {

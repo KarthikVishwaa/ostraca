@@ -9,6 +9,8 @@ import { buildFacts, type DisputeContext } from "@/lib/dispute-facts";
 import { proposeAction } from "@/lib/approvals";
 import { hasLink } from "@/lib/paypal/client";
 import { checkDraft, stripCitations } from "@/lib/validation/draft";
+import { checkTracking } from "@/lib/validation/tracking";
+import { buildEvidencePayload, type EvidenceItem } from "@/lib/paypal/evidence-payload";
 
 /** PayPal dispute IDs look like PP-R-NHE-10197361. */
 export const disputeIdSchema = z.string().regex(/^[A-Za-z0-9-]{6,40}$/);
@@ -20,6 +22,22 @@ export async function loadDispute(id: string) {
   const ctx: DisputeContext = { id: d.dispute_id, reason: d.reason, created: d.create_time, amount: d.dispute_amount };
   const built = synced.sale ? await buildFacts(synced.sale, ctx) : null;
   return { ...synced, ctx, built };
+}
+
+type Loaded = Awaited<ReturnType<typeof loadDispute>>;
+
+/** Verified tracking for the dispute's sale. The carrier is the confirmed one, else the one the tracking number itself points to. */
+function trackingFor(d: Loaded) {
+  const t = d.built?.tracking;
+  if (!t) return null;
+  const carrierName = t.carrierName ?? checkTracking(t.trackingNumber).carrierGuess ?? null;
+  return { trackingNumber: t.trackingNumber, carrierName };
+}
+
+/** The evidences PayPal will accept right now, from the live dispute (reason, stage, what PayPal requested). */
+function evidenceFor(d: Loaded, notes: string) {
+  const requested = (d.detail.evidences ?? []).filter((e) => e.source === "REQUESTED_FROM_SELLER").map((e) => e.evidence_type);
+  return buildEvidencePayload({ reason: d.detail.reason, stage: d.detail.dispute_life_cycle_stage, requested, notes, tracking: trackingFor(d) });
 }
 
 export type Failure = { ok: false; status: number; reason: string; problems?: string[] };
@@ -38,9 +56,9 @@ export async function proposeEvidence(disputeId: string, draft: string) {
   const notes = stripCitations(draft);
   if (notes.length > 2000) return fail(422, `The response is ${notes.length} characters; PayPal accepts at most 2000.`);
 
-  const tracking = d.built.tracking?.carrierName
-    ? { carrierName: d.built.tracking.carrierName, trackingNumber: d.built.tracking.trackingNumber }
-    : undefined;
+  const built = evidenceFor(d, notes);
+  if (!built.ok) return fail(422, built.reason);
+  const tracking = trackingFor(d);
   const digest = createHash("sha256").update(JSON.stringify({ notes, tracking })).digest("hex").slice(0, 16);
   const idempotencyKey = `evidence-${d.detail.dispute_id}-${digest}`;
 
@@ -64,7 +82,7 @@ export async function proposeEvidence(disputeId: string, draft: string) {
       type: "provide_evidence",
       transactionId: d.sale.id,
       disputeId: d.row.id,
-      payload: { paypalDisputeId: d.detail.dispute_id, draft, notes, tracking, cited: check.cited },
+      payload: { paypalDisputeId: d.detail.dispute_id, draft, notes, tracking: tracking ?? undefined, evidences: built.evidences, cited: check.cited },
       idempotencyKey,
     },
     { revive: true }
@@ -77,7 +95,7 @@ export async function proposeEvidence(disputeId: string, draft: string) {
  * Run BEFORE approval is recorded. Re-reads the dispute from PayPal and refuses unless PayPal currently
  * offers provide_evidence, and the stored text still passes the checks against today's facts.
  */
-export async function precheckEvidence(payload: { paypalDisputeId: string; draft: string }): Promise<{ ok: true } | Failure> {
+export async function precheckEvidence(payload: { paypalDisputeId: string; draft: string }): Promise<{ ok: true; evidences: EvidenceItem[] } | Failure> {
   const d = await loadDispute(payload.paypalDisputeId);
   if (!hasLink(d.detail.links, "provide_evidence")) {
     await audit("system", "dispute.evidence_blocked", { type: "dispute", id: d.detail.dispute_id }, { status: d.detail.status, stage: d.detail.dispute_life_cycle_stage });
@@ -86,7 +104,9 @@ export async function precheckEvidence(payload: { paypalDisputeId: string; draft
   if (!d.built) return fail(422, "No matching sale for this dispute.");
   const check = checkDraft(payload.draft, d.built.facts);
   if (!check.ok) return fail(422, "The proof on file changed and the draft no longer passes the checks. Draft it again.", check.problems);
-  return { ok: true };
+  const built = evidenceFor(d, stripCitations(payload.draft));
+  if (!built.ok) return fail(422, built.reason);
+  return { ok: true, evidences: built.evidences };
 }
 
 function fail(status: number, reason: string, problems?: string[]): Failure {

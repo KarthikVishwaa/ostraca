@@ -68,7 +68,7 @@ export function toErrorInfo(e: unknown): ErrorInfo {
   if (e instanceof PayPalError) {
     logError("PayPal error", e);
     const status = paypalStatus(e.status);
-    return { status, message: e.message, code: status === 502 ? "upstream_error" : CODES[status] ?? "error", debugId: e.debugId };
+    return { status, message: e.message, code: status === 502 ? "upstream_error" : CODES[status] ?? "error", debugId: e.debugId, extra: e.details.length ? { problems: e.details } : undefined };
   }
   logError("Unhandled route error", e);
   return { status: 500, message: "Something went wrong on our side. Please try again.", code: "internal_error" };

@@ -1,5 +1,6 @@
 import "server-only";
 import { paypal, type HateoasLink } from "./client";
+import type { EvidenceItem } from "./evidence-payload";
 
 export type DisputeSummary = {
   dispute_id: string;
@@ -17,6 +18,8 @@ export type DisputeDetail = DisputeSummary & {
   dispute_outcome?: { outcome_code?: string };
   seller_response_due_date?: string;
   messages?: Array<{ posted_by: string; content: string; time_posted: string }>;
+  /** What PayPal has asked for (REQUESTED_FROM_SELLER) or received (SUBMITTED_BY_*). */
+  evidences?: Array<{ evidence_type: string; source?: string }>;
 };
 
 export function listDisputes(params: { pageSize?: number } = {}) {
@@ -35,23 +38,14 @@ export function getDispute(id: string) {
  */
 export function provideEvidence(input: {
   disputeId: string;
-  notes: string;
-  tracking?: { carrierName: string; trackingNumber: string };
+  /** Built by buildEvidencePayload (src/lib/paypal/evidence-payload.ts), the only place that knows PayPal's rules. */
+  evidences: EvidenceItem[];
   files?: Array<{ name: string; type: string; bytes: Buffer }>;
   idempotencyKey: string;
 }) {
   const form = new FormData();
-  const evidenceItem = {
-    evidence_type: input.tracking ? "PROOF_OF_FULFILLMENT" : "OTHER",
-    evidence_info: input.tracking
-      ? { tracking_info: [{ carrier_name: input.tracking.carrierName, tracking_number: input.tracking.trackingNumber }] }
-      : undefined,
-    notes: input.notes.slice(0, 2000),
-  };
-  form.append("input", new Blob([JSON.stringify({ evidences: [evidenceItem] })], { type: "application/json" }));
-  input.files?.forEach((f, i) =>
-    form.append(`file${i + 1}`, new Blob([new Uint8Array(f.bytes)], { type: f.type }), f.name)
-  );
+  form.append("input", new Blob([JSON.stringify({ evidences: input.evidences })], { type: "application/json" }));
+  input.files?.forEach((f, i) => form.append(`file${i + 1}`, new Blob([new Uint8Array(f.bytes)], { type: f.type }), f.name));
   return paypal(`/v1/customer/disputes/${encodeURIComponent(input.disputeId)}/provide-evidence`, {
     form,
     idempotencyKey: input.idempotencyKey,

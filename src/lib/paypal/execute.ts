@@ -1,6 +1,7 @@
 import "server-only";
 import { addTracking } from "./orders";
 import { provideEvidence } from "./disputes";
+import type { EvidenceItem } from "./evidence-payload";
 
 /**
  * EXECUTES an action the seller already approved. This module only talks to PayPal: it knows nothing about
@@ -14,11 +15,10 @@ export type TrackingPayload = {
   carrierNameOther?: string;
 };
 
-/** `notes` is the seller-approved text with citation markers already removed. */
+/** `evidences` is rebuilt from PayPal's live dispute right before sending (see precheckEvidence). */
 export type EvidencePayload = {
   paypalDisputeId: string;
-  notes: string;
-  tracking?: { carrierName: string; trackingNumber: string };
+  evidences?: EvidenceItem[];
 };
 
 export async function executeAction(action: { type: string; payload: unknown; idempotencyKey: string }) {
@@ -29,7 +29,8 @@ export async function executeAction(action: { type: string; payload: unknown; id
     }
     case "provide_evidence": {
       const p = action.payload as EvidencePayload;
-      return provideEvidence({ disputeId: p.paypalDisputeId, notes: p.notes, tracking: p.tracking, idempotencyKey: action.idempotencyKey });
+      if (!p.evidences?.length) throw new Error("This evidence request was not prepared for PayPal. Nothing was sent.");
+      return provideEvidence({ disputeId: p.paypalDisputeId, evidences: p.evidences, idempotencyKey: action.idempotencyKey });
     }
     default:
       throw new Error(`No executor for action type "${action.type}"`);

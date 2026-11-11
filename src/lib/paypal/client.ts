@@ -13,6 +13,12 @@ export class PayPalError extends Error {
     super(message);
     this.name = "PayPalError";
   }
+
+  /** PayPal's own `details`, one readable line each: "field: ISSUE: description". */
+  get details(): string[] {
+    const d = (this.body as { details?: Array<{ field?: string; issue?: string; description?: string; value?: string }> } | null)?.details;
+    return (d ?? []).map((x) => [x.field && `${x.field}:`, x.issue, x.description && `- ${x.description}`, x.value && `(value: ${String(x.value).slice(0, 80)})`].filter(Boolean).join(" ")).filter(Boolean);
+  }
 }
 
 let token: { value: string; expiresAt: number } | null = null;
