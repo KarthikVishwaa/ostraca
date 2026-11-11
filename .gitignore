@@ -54,3 +54,5 @@ next-env.d.ts
 .claude/
 CLAUDE.md
 AGENTS.md
+playwright-report/
+test-results/
