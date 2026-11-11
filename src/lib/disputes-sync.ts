@@ -3,13 +3,15 @@ import { eq } from "drizzle-orm";
 import { getDispute } from "@/lib/paypal/disputes";
 import { db, schema } from "@/db";
 import { audit } from "@/db/audit";
-import { DisputeIgnoredError, latestResetAt, predatesReset } from "@/lib/data-reset";
+import { DisputeIgnoredError, importedDisputeIds, latestResetAt, predatesReset } from "@/lib/data-reset";
 
 /** Re-reads a dispute from PayPal and upserts it. Status always comes from PayPal, never from us. */
 export async function syncDispute(disputeId: string) {
   const detail = await getDispute(disputeId);
   // Old sandbox disputes that PayPal still holds must not come back after a data reset.
-  if (predatesReset(detail.create_time, await latestResetAt())) throw new DisputeIgnoredError(detail.dispute_id);
+  if (predatesReset(detail.create_time, await latestResetAt()) && !(await importedDisputeIds([detail.dispute_id])).has(detail.dispute_id)) {
+    throw new DisputeIgnoredError(detail.dispute_id);
+  }
   const sellerTxnId = detail.disputed_transactions?.find((t) => t.seller_transaction_id)?.seller_transaction_id;
   const sale = sellerTxnId
     ? (await db().select().from(schema.transactions).where(eq(schema.transactions.paypalCaptureId, sellerTxnId)))[0]

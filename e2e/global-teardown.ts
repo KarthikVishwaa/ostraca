@@ -21,6 +21,10 @@ export default async function globalTeardown() {
       )
     ).rows.map((r) => r.id);
 
+    if (s.proofEvidenceId) {
+      await db.query(`delete from transaction_evidence where evidence_id = $1`, [s.proofEvidenceId]);
+      await db.query(`delete from evidence where id = $1`, [s.proofEvidenceId]); // its extractions go with it
+    }
     await db.query(`delete from agent_actions where id = any($1)`, [actionIds]);
     await db.query(`delete from transactions where id = any($1)`, [txIds]); // cascades to transaction_evidence and the sale's extractions links
     // Evidence only if the run created it and nothing else links to it now.

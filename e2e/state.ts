@@ -6,6 +6,8 @@ export type E2EState = {
   runStart: string; // ISO time of the run; teardown only touches rows created after it
   main: { id: string; captureId: string; item: string; buyer: string; city: string };
   sparse: { id: string; captureId: string; item: string };
+  /** Temporary proof added to the dispute's sale so a draft can be written; removed in teardown. */
+  proofEvidenceId?: string;
 };
 
 const FILE = join(process.cwd(), "e2e", ".state.json");

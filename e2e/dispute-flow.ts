@@ -1,5 +1,5 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { allowApi, expect } from "./fixtures";
+import { allowApi, expect, test } from "./fixtures";
 
 /** The dispute to use: E2E_DISPUTE_ID, or the first one PayPal lists for this merchant. */
 export async function disputeId(request: APIRequestContext): Promise<string> {
@@ -75,6 +75,16 @@ export async function runDisputeJourney(page: Page, id: string, opts: { button: 
   await expect(page.getByRole("button", { name: "Queue for approval" })).toBeEnabled();
   await page.getByRole("button", { name: "Queue for approval" }).click();
   await expect(page.getByText("Ready to send to PayPal")).toBeVisible();
+
+  // If PayPal would accept evidence for this dispute right now, Approve would really send it and change the dispute
+  // in the sandbox, which cannot be undone. Then the test stops before the click and only checks the button is ready.
+  const live = (await (await page.request.get(`/api/disputes/${id}`)).json()) as { dispute: { can: { provideEvidence: boolean } } };
+  if (live.dispute.can.provideEvidence) {
+    test.info().annotations.push({ type: "approve not clicked", description: "PayPal currently accepts evidence for this dispute; approving would change it for real." });
+    await expect(page.getByRole("button", { name: /Approve and send to PayPal|Approve and retry/ })).toBeEnabled();
+    await expect(page.getByText(/Status is read from PayPal/)).toBeVisible();
+    return;
+  }
 
   // Approve: either PayPal accepts it, or we see PayPal's real message. Never a crash or a bare 500.
   const approveResponse = page.waitForResponse((r) => /\/api\/actions\/[^/]+\/approve/.test(r.url()) && r.request().method() === "POST");

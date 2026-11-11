@@ -5,13 +5,16 @@ import { api } from "@/lib/api";
 import { logError } from "@/lib/log";
 import { syncDispute } from "@/lib/disputes-sync";
 import { db, schema } from "@/db";
-import { latestResetAt, predatesReset } from "@/lib/data-reset";
+import { importedDisputeIds, latestResetAt, predatesReset } from "@/lib/data-reset";
 
 /** Lists disputes straight from PayPal (status and stage are always PayPal's), each with the linked sale. */
 export const GET = api({}, async () => {
   const resetAt = await latestResetAt();
   // Disputes PayPal created before the last data reset are not shown at all, not even as "No matching sale".
-  const items = ((await listDisputes()).items ?? []).filter((d) => !predatesReset(d.create_time, resetAt));
+  const all = (await listDisputes()).items ?? [];
+  // Imported disputes (scripts/import-dispute.ts) are kept even if PayPal created them before the reset.
+  const imported = await importedDisputeIds(all.map((d) => d.dispute_id));
+  const items = all.filter((d) => imported.has(d.dispute_id) || !predatesReset(d.create_time, resetAt));
   const ids = items.map((d) => d.dispute_id);
   let rows = ids.length ? await db().select().from(schema.disputes).where(inArray(schema.disputes.paypalDisputeId, ids)) : [];
 

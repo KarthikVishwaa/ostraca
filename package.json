@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "test:e2e:mobile": "playwright test --project=mobile",
     "test:live": "tsx scripts/test-live.ts",
-    "test:all": "npm run typecheck && npm run build && npm run check:secrets && npm run test:e2e"
+    "test:all": "npm run typecheck && npm run build && npm run check:secrets && npm run test:e2e",
+    "import:dispute": "tsx --conditions react-server scripts/import-dispute.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
