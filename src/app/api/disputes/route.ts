@@ -4,6 +4,7 @@ import { listDisputes } from "@/lib/paypal/disputes";
 import { paypalErrorResponse } from "@/lib/http";
 import { syncDispute } from "@/lib/disputes-sync";
 import { db, schema } from "@/db";
+import { latestResetAt, predatesReset } from "@/lib/data-reset";
 
 /**
  * Lists disputes straight from PayPal (status and stage are always PayPal's), each with the linked sale.
@@ -12,7 +13,9 @@ import { db, schema } from "@/db";
  */
 export async function GET() {
   try {
-    const { items = [] } = await listDisputes();
+    const resetAt = await latestResetAt();
+    // Disputes PayPal created before the last data reset are not shown at all, not even as "No matching sale".
+    const items = ((await listDisputes()).items ?? []).filter((d) => !predatesReset(d.create_time, resetAt));
     const ids = items.map((d) => d.dispute_id);
     let rows = ids.length ? await db().select().from(schema.disputes).where(inArray(schema.disputes.paypalDisputeId, ids)) : [];
 

@@ -26,6 +26,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const input = body.safeParse(await req.json().catch(() => null));
   if (!id.success || !input.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
 
+  try {
+    await syncDispute(id.data); // throws for a dispute created before the last data reset
+  } catch (e) {
+    return paypalErrorResponse(e);
+  }
+
   const what = input.data.action === "adjudicate" ? `adjudicate:${input.data.outcome}` : "require_evidence";
   try {
     if (input.data.action === "require_evidence") await sandboxRequireEvidence(id.data);

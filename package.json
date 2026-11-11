@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "check:sandbox": "tsx scripts/check-sandbox.ts",
-    "db:test": "node scripts/db-test.mjs"
+    "db:test": "node scripts/db-test.mjs",
+    "db:reset": "tsx scripts/reset-data.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",

@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { verifyWebhook } from "@/lib/paypal/webhooks";
 import { syncDispute } from "@/lib/disputes-sync";
 import { audit } from "@/db/audit";
+import { DisputeIgnoredError } from "@/lib/data-reset";
 
 /**
  * PayPal webhook receiver (the fast path; the disputes pages also poll PayPal every 10 seconds).
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
       try {
         await syncDispute(disputeId); // CREATED, UPDATED, RESOLVED all just trigger a fresh read
       } catch (e) {
+        if (e instanceof DisputeIgnoredError) return NextResponse.json({ ok: true, ignored: "dispute predates the last data reset" });
         console.error("webhook dispute sync failed", e);
         return NextResponse.json({ error: "could not re-read the dispute from PayPal" }, { status: 500 }); // PayPal will retry
       }
